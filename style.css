@@ -16,3 +16,31 @@ html, body {
   image-rendering: crisp-edges;
   cursor: none;
 }
+
+#name-form {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.72);
+  z-index: 10;
+}
+.nb {
+  background: #161b22; border: 1px solid #30363d;
+  padding: 28px 24px; width: 280px; border-radius: 6px; text-align: center;
+}
+#nf-title { color: #c9d1d9; font: 14px monospace; margin-bottom: 16px; }
+#nf-input {
+  width: 100%; background: #0d1117; border: 1px solid #388bfd;
+  color: #fff; font: 16px monospace; padding: 10px 12px;
+  border-radius: 4px; outline: none; box-sizing: border-box;
+  text-transform: uppercase;
+}
+.nb-row { display: flex; gap: 10px; margin-top: 14px; }
+#nf-submit {
+  flex: 1; background: #238636; color: #fff; font: bold 14px monospace;
+  border: none; padding: 12px; border-radius: 4px; cursor: pointer;
+}
+#nf-skip {
+  flex: 1; background: rgba(255,255,255,0.1); color: #ccc;
+  font: 14px monospace; border: none; padding: 12px;
+  border-radius: 4px; cursor: pointer;
+}

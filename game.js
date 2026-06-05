@@ -83,6 +83,9 @@ const LANG = {
     tut1b:'Cycle: top → mid → bottom', tut2a:'YELLOW = your ECHO scores it',
     tut2b:'Be in that lane NOW', tut2c:'Echo follows later!',
     miss:'MISS', combo:'COMBO', level:'LEVEL',
+    leaderboard:'LEADERBOARD', back:'BACK', submitScore:'SUBMIT SCORE',
+    enterName:'Enter your name', noScores:'No scores yet. Be first!',
+    yourBest:'YOUR BEST', lv:'Lv', submitting:'Submitting…', submitted:'Submitted!',
   },
   zh: {
     title2:'跑者', tagline1:'控制你的回声。',
@@ -99,6 +102,9 @@ const LANG = {
     tut2b:'现在进入该跑道',
     tut2c:'回声稍后跟随！',
     miss:'未中', combo:'连击', level:'关卡',
+    leaderboard:'排行榜', back:'返回', submitScore:'提交分数',
+    enterName:'输入你的名字', noScores:'暂无记录，率先上榜！',
+    yourBest:'你的最高分', lv:'关', submitting:'提交中…', submitted:'提交成功！',
   },
 };
 const ZH_FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif';
@@ -139,8 +145,8 @@ function displayText(ctx, text, cx, cy, scale, col) {
 }
 
 // EN | 中文 toggle rendered at given y-centre
-const LANG_BTN_Y_TITLE = 468;
-const LANG_BTN_Y_GO    = 492;
+const LANG_BTN_Y_TITLE = 500;
+const LANG_BTN_Y_GO    = 502;
 
 function drawLangToggle(ctx, y) {
   const cx = CFG.W / 2, bw = 52, bh = 28;
@@ -164,6 +170,59 @@ function checkLangToggle(lx, ly, btnY) {
   if (lx >= cx - 58 && lx <= cx - 6)  { setLang('en'); return true; }
   if (lx >= cx + 6  && lx <= cx + 58) { setLang('zh'); return true; }
   return false;
+}
+
+// ─── SANITISE / FIREBASE ─────────────────────────────────────────────────────
+function sanitizeName(raw) {
+  return raw
+    .trim()
+    .replace(/[<>&"'`]/g, '')
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .slice(0, 12);
+}
+
+let _db = null;
+function fbInit() {
+  if (_db) return true;
+  if (!window._fbCfg || window._fbCfg.apiKey === 'YOUR_API_KEY') return false;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(window._fbCfg);
+    _db = firebase.database();
+    return true;
+  } catch(e) { return false; }
+}
+function fbEnabled() { return _db !== null || fbInit(); }
+
+async function fetchLeaderboard() {
+  if (!fbEnabled()) return;
+  g.lb.loading = true;
+  try {
+    const snap = await _db.ref('leaderboard').orderByChild('score').limitToLast(20).get();
+    const arr = [];
+    snap.forEach(c => arr.push(c.val()));
+    g.lb.entries = arr.sort((a, b) => b.score - a.score);
+  } catch(e) {}
+  g.lb.loading = false;
+}
+
+async function submitScore(name, score, level) {
+  if (!fbEnabled() || score <= 0) return;
+  const clean = sanitizeName(name);
+  if (!clean) return;
+  g.lb.submitState = 'submitting';
+  try {
+    await _db.ref('leaderboard').push({ name: clean, score, level, ts: Date.now() });
+    g.lb.submitState = 'done';
+    fetchLeaderboard();
+  } catch(e) { g.lb.submitState = 'error'; }
+}
+
+function showNameForm() {
+  if (!fbEnabled()) return;
+  document.getElementById('nf-title').textContent = t('enterName');
+  document.getElementById('nf-input').value = '';
+  document.getElementById('name-form').style.display = 'flex';
+  setTimeout(() => document.getElementById('nf-input').focus(), 100);
 }
 
 // ─── PARTICLES ──────────────────────────────────────────────────────────────
@@ -234,7 +293,7 @@ function spawnObs(lane, type) {
 }
 
 // ─── GAME STATE ──────────────────────────────────────────────────────────────
-const S = { TITLE:'TITLE', PLAYING:'PLAYING', DEAD:'DEAD', AD:'AD' };
+const S = { TITLE:'TITLE', PLAYING:'PLAYING', DEAD:'DEAD', AD:'AD', LEADERBOARD:'LEADERBOARD' };
 
 const g = {
   state: S.TITLE,
@@ -260,6 +319,7 @@ const g = {
   sessionStart: 0,
   tapCount: 0,
   yellowsTotal: 0,
+  lb: { entries: [], loading: false, submitState: 'idle' },
 };
 
 // ─── AD STUB ────────────────────────────────────────────────────────────────
@@ -276,7 +336,7 @@ function initGame() {
   g.palBlend = 1; g.prevPal = null;
   g.laneAnim.active = false; g.laneAnim.from = g.laneAnim.to = 1;
   g.echoAnim.active = false; g.echoAnim.from = g.echoAnim.to = 1;
-  g.comboMax = 0; g.tapCount = 0; g.yellowsTotal = 0;
+  g.comboMax = 0; g.tapCount = 0; g.yellowsTotal = 0; g.lb.submitState = 'idle';
   g.sessionStart = performance.now();
   hist.clear();
   parts.forEach(p => p.active = false);
@@ -341,12 +401,13 @@ function die(who) {
     taps: g.tapCount,
     yellows_total: g.yellowsTotal,
   });
-  setTimeout(() => {
-    g.state = S.AD;
-    track('ad_request');
-    window.showAd(() => { track('ad_complete'); initGame(); g.state = S.PLAYING; });
-    setTimeout(() => { if (g.state === S.AD) { initGame(); g.state = S.PLAYING; } }, 10000);
-  }, 900);
+}
+
+function triggerPlayAgain() {
+  g.state = S.AD;
+  track('ad_request');
+  window.showAd(() => { track('ad_complete'); initGame(); g.state = S.PLAYING; });
+  setTimeout(() => { if (g.state === S.AD) { initGame(); g.state = S.PLAYING; } }, 10000);
 }
 
 // ─── COLLISIONS ──────────────────────────────────────────────────────────────
@@ -632,13 +693,19 @@ function drawTitle(ctx) {
   const alpha = 0.5 + 0.5 * Math.sin(Date.now() / 450);
   ctx.fillStyle = `rgba(255,255,255,${alpha})`;
   ctx.font = `bold 15px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
-  ctx.fillText(t('tapToPlay'), CFG.W / 2, 410);
+  ctx.fillText(t('tapToPlay'), CFG.W / 2, 400);
   // Best score
   if (g.hi > 0) {
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = uiFont(12);
-    ctx.fillText(t('best') + ': ' + g.hi, CFG.W / 2, 450);
+    ctx.fillText(t('best') + ': ' + g.hi, CFG.W / 2, 440);
   }
+  // Leaderboard button
+  ctx.fillStyle = 'rgba(88,166,255,0.2)';
+  ctx.fillRect(CFG.W / 2 - 80, 458, 160, 32);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = uiFont(13);
+  ctx.fillText(t('leaderboard'), CFG.W / 2, 479);
   // Language toggle
   drawLangToggle(ctx, LANG_BTN_Y_TITLE);
 }
@@ -660,21 +727,100 @@ function drawGameOver(ctx) {
   }
   // Play again button
   ctx.fillStyle = '#238636';
-  ctx.fillRect(CFG.W / 2 - 90, 370, 180, 44);
+  ctx.fillRect(CFG.W / 2 - 90, 360, 180, 44);
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold 15px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
-  ctx.fillText(t('playAgain'), CFG.W / 2, 397);
+  ctx.fillText(t('playAgain'), CFG.W / 2, 387);
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.font = uiFont(10);
-  ctx.fillText(t('adNote'), CFG.W / 2, 428);
+  ctx.fillText(t('adNote'), CFG.W / 2, 418);
+  // Submit score + Leaderboard row
+  const hasFb = fbEnabled();
+  ctx.fillStyle = hasFb ? 'rgba(35,134,54,0.7)' : 'rgba(255,255,255,0.06)';
+  ctx.fillRect(CFG.W / 2 - 105, 428, 100, 32);
+  ctx.fillStyle = hasFb ? '#ffffff' : 'rgba(255,255,255,0.25)';
+  ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
+  ctx.fillText(t('submitScore'), CFG.W / 2 - 55, 449);
+  ctx.fillStyle = 'rgba(88,166,255,0.25)';
+  ctx.fillRect(CFG.W / 2 + 5, 428, 100, 32);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
+  ctx.fillText(t('leaderboard'), CFG.W / 2 + 55, 449);
   // Home button
   ctx.fillStyle = 'rgba(255,255,255,0.1)';
-  ctx.fillRect(CFG.W / 2 - 55, 442, 110, 36);
+  ctx.fillRect(CFG.W / 2 - 55, 468, 110, 26);
   ctx.fillStyle = 'rgba(255,255,255,0.65)';
   ctx.font = uiFont(14);
-  ctx.fillText(t('home'), CFG.W / 2, 465);
+  ctx.fillText(t('home'), CFG.W / 2, 486);
   // Language toggle
   drawLangToggle(ctx, LANG_BTN_Y_GO);
+}
+
+// ─── LEADERBOARD SCREEN ──────────────────────────────────────────────────────
+function drawLeaderboard(ctx) {
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, CFG.W, CFG.H);
+
+  displayText(ctx, t('leaderboard'), CFG.W / 2, 12, 3, '#58a6ff');
+
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fillRect(0, 36, CFG.W, 1);
+
+  ctx.textAlign = 'center';
+  if (!fbEnabled()) {
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = uiFont(12);
+    ctx.fillText('Firebase not configured.', CFG.W / 2, CFG.H / 2 - 20);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = uiFont(10);
+    ctx.fillText('See index.html to set up.', CFG.W / 2, CFG.H / 2);
+  } else if (g.lb.loading) {
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = uiFont(12);
+    ctx.fillText(t('loading'), CFG.W / 2, CFG.H / 2);
+  } else if (g.lb.entries.length === 0) {
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = uiFont(12);
+    ctx.fillText(t('noScores'), CFG.W / 2, CFG.H / 2);
+  } else {
+    const rowH = 24, startY = 46;
+    for (let i = 0; i < Math.min(20, g.lb.entries.length); i++) {
+      const entry = g.lb.entries[i];
+      const ry = startY + i * rowH;
+      if (i % 2 === 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(0, ry, CFG.W, rowH);
+      }
+      const ty = ry + 17;
+      ctx.textAlign = 'left';
+      ctx.font = uiFont(11);
+      ctx.fillStyle = i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : 'rgba(255,255,255,0.4)';
+      ctx.fillText('#' + (i + 1), 8, ty);
+      ctx.fillStyle = '#c9d1d9';
+      ctx.fillText(String(entry.name).slice(0, 10), 42, ty);
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'right';
+      ctx.fillText(entry.score, 272, ty);
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.textAlign = 'left';
+      ctx.fillText(t('lv') + entry.level, 280, ty);
+    }
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(0, 548, CFG.W, 1);
+  if (g.hi > 0) {
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = uiFont(11);
+    ctx.textAlign = 'center';
+    ctx.fillText(t('yourBest') + ': ' + g.hi, CFG.W / 2, 562);
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(CFG.W / 2 - 70, 572, 140, 36);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = uiFont(13);
+  ctx.textAlign = 'center';
+  ctx.fillText(t('back'), CFG.W / 2, 595);
 }
 
 // ─── AD WAITING SCREEN ───────────────────────────────────────────────────────
@@ -754,6 +900,7 @@ function render(ctx, now) {
   const pal = getPal(g.level);
   drawBackground(ctx, pal);
 
+  if (g.state === S.LEADERBOARD) { drawLeaderboard(ctx); return; }
   if (g.state === S.TITLE) { drawTitle(ctx); return; }
   if (g.state === S.AD)    { drawAdWait(ctx); return; }
 
@@ -876,6 +1023,9 @@ function onTap(e) {
   if (g.state === S.TITLE) {
     const { lx, ly } = tapLogical(e);
     if (checkLangToggle(lx, ly, LANG_BTN_Y_TITLE)) return;
+    if (lx > CFG.W/2 - 80 && lx < CFG.W/2 + 80 && ly > 458 && ly < 490) {
+      fetchLeaderboard(); g.state = S.LEADERBOARD; return;
+    }
     initGame();
     g.state = S.PLAYING;
     g.tutStep = 0;
@@ -883,6 +1033,11 @@ function onTap(e) {
   }
 
   const { lx, ly } = tapLogical(e);
+
+  if (g.state === S.LEADERBOARD) {
+    if (lx > CFG.W/2 - 70 && lx < CFG.W/2 + 70 && ly > 572 && ly < 608) { g.state = S.TITLE; }
+    return;
+  }
 
   // Home button (top-left 30×30) — checked first in all active states
   if ((g.state === S.PLAYING || g.state === S.DEAD)
@@ -894,11 +1049,10 @@ function onTap(e) {
 
   if (g.state === S.DEAD) {
     if (checkLangToggle(lx, ly, LANG_BTN_Y_GO)) return;
-    // HOME text button in game-over screen
-    if (lx > CFG.W / 2 - 55 && lx < CFG.W / 2 + 55 && ly > 442 && ly < 478) {
-      goHome();
-    }
-    // PLAY AGAIN button handled by die() timeout — tap is a no-op here
+    if (lx > CFG.W/2 - 90 && lx < CFG.W/2 + 90 && ly > 360 && ly < 404) { triggerPlayAgain(); return; }
+    if (lx > CFG.W/2 - 105 && lx < CFG.W/2 - 5  && ly > 428 && ly < 460) { showNameForm(); return; }
+    if (lx > CFG.W/2 + 5   && lx < CFG.W/2 + 105 && ly > 428 && ly < 460) { fetchLeaderboard(); g.state = S.LEADERBOARD; return; }
+    if (lx > CFG.W/2 - 55  && lx < CFG.W/2 + 55  && ly > 468 && ly < 494) { goHome(); return; }
     return;
   }
 
@@ -951,6 +1105,16 @@ function loop(ts) {
 
   canvas.addEventListener('touchstart', onTap, { passive: false });
   canvas.addEventListener('mousedown',  onTap);
+
+  document.getElementById('nf-submit').onclick = () => {
+    const name = sanitizeName(document.getElementById('nf-input').value);
+    if (!name) { document.getElementById('nf-input').focus(); return; }
+    document.getElementById('name-form').style.display = 'none';
+    submitScore(name, g.score, g.level);
+  };
+  document.getElementById('nf-skip').onclick = () => {
+    document.getElementById('name-form').style.display = 'none';
+  };
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
