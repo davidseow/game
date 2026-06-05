@@ -72,6 +72,100 @@ function track(event, params = {}) {
   if (typeof gtag === 'function') gtag('event', event, params);
 }
 
+// ─── I18N ────────────────────────────────────────────────────────────────────
+const LANG = {
+  en: {
+    title2:'RUNNER', tagline1:'Control your ECHO.', tagline2:'Plan 2 seconds ahead.',
+    tapToPlay:'TAP TO PLAY', best:'BEST', lvl:'LVL', echo:'ECHO', you:'YOU',
+    go1:'GAME', go2:'OVER', score:'SCORE', newBest:'NEW BEST!',
+    playAgain:'PLAY AGAIN', adNote:'(short ad may play)', home:'HOME',
+    loading:'Loading...', tut1a:'TAP anywhere to switch lanes',
+    tut1b:'Cycle: top → mid → bottom', tut2a:'YELLOW = your ECHO scores it',
+    tut2b:'Be in that lane NOW', tut2c:'Echo follows later!',
+    miss:'MISS', combo:'COMBO', level:'LEVEL',
+  },
+  zh: {
+    title2:'跑者', tagline1:'控制你的回声。',
+    tagline2:'提前两秒规划路线。',
+    tapToPlay:'点击开始', best:'最高分', lvl:'关卡',
+    echo:'回声', you:'你',
+    go1:'游戏', go2:'结束', score:'得分',
+    newBest:'新纪录！', playAgain:'再玩一次',
+    adNote:'（将播放短广告）', home:'主页',
+    loading:'加载中…',
+    tut1a:'点击屏幕切换跑道',
+    tut1b:'循环：上 → 中 → 下',
+    tut2a:'黄色目标 = 让回声撞上得分',
+    tut2b:'现在进入该跑道',
+    tut2c:'回声稍后跟随！',
+    miss:'未中', combo:'连击', level:'关卡',
+  },
+};
+const ZH_FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif';
+let currentLang = 'en';
+
+function t(key) { return (LANG[currentLang] || LANG.en)[key] || LANG.en[key] || key; }
+function uiFont(size) { return currentLang === 'zh' ? `${size}px ${ZH_FONT}` : `${size}px monospace`; }
+
+function initLang() {
+  const p = new URLSearchParams(window.location.search).get('lang');
+  if (p === 'zh' || p === 'en') {
+    currentLang = p;
+    localStorage.setItem('echorunner_lang', p);
+  } else {
+    const saved = localStorage.getItem('echorunner_lang');
+    currentLang = saved || (navigator.language.startsWith('zh') ? 'zh' : 'en');
+  }
+}
+
+function setLang(l) {
+  currentLang = l;
+  localStorage.setItem('echorunner_lang', l);
+  const url = new URL(window.location);
+  url.searchParams.set('lang', l);
+  window.history.replaceState({}, '', url);
+}
+
+// For overlay words (COMBO/MISS/LEVEL): pixel font in EN, system font in ZH
+function displayText(ctx, text, cx, cy, scale, col) {
+  if (currentLang === 'zh') {
+    ctx.fillStyle = col;
+    ctx.font = `bold ${Math.round(scale * 8)}px ${ZH_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(text, cx, cy + scale * 4.5);
+  } else {
+    drawText5(ctx, text, cx, cy, scale, col);
+  }
+}
+
+// EN | 中文 toggle rendered at given y-centre
+const LANG_BTN_Y_TITLE = 468;
+const LANG_BTN_Y_GO    = 492;
+
+function drawLangToggle(ctx, y) {
+  const cx = CFG.W / 2, bw = 52, bh = 28;
+  ctx.fillStyle = currentLang === 'en' ? 'rgba(88,166,255,0.85)' : 'rgba(255,255,255,0.12)';
+  ctx.fillRect(cx - 58, y, bw, bh);
+  ctx.fillStyle = currentLang === 'en' ? '#0d1117' : 'rgba(255,255,255,0.6)';
+  ctx.font = 'bold 13px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('EN', cx - 32, y + 19);
+
+  ctx.fillStyle = currentLang === 'zh' ? 'rgba(88,166,255,0.85)' : 'rgba(255,255,255,0.12)';
+  ctx.fillRect(cx + 6, y, bw, bh);
+  ctx.fillStyle = currentLang === 'zh' ? '#0d1117' : 'rgba(255,255,255,0.6)';
+  ctx.font = `bold 13px ${ZH_FONT}`;
+  ctx.fillText('中文', cx + 32, y + 19);
+}
+
+function checkLangToggle(lx, ly, btnY) {
+  if (ly < btnY || ly > btnY + 28) return false;
+  const cx = CFG.W / 2;
+  if (lx >= cx - 58 && lx <= cx - 6)  { setLang('en'); return true; }
+  if (lx >= cx + 6  && lx <= cx + 58) { setLang('zh'); return true; }
+  return false;
+}
+
 // ─── PARTICLES ──────────────────────────────────────────────────────────────
 const POOL_SIZE = 180;
 const parts = Array.from({length: POOL_SIZE}, () => ({active:false,x:0,y:0,vx:0,vy:0,life:0,max:0,sz:0,col:'#fff'}));
@@ -417,12 +511,12 @@ function drawHUD(ctx, pal) {
   ctx.fillText(g.score, CFG.W / 2, 36);
   // Best
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.font = '12px monospace';
+  ctx.font = uiFont(12);
   ctx.textAlign = 'right';
-  ctx.fillText('BEST ' + g.hi, CFG.W - 8, 20);
+  ctx.fillText(t('best') + ' ' + g.hi, CFG.W - 8, 20);
   // Level (shifted right to clear home icon)
   ctx.textAlign = 'left';
-  ctx.fillText('LVL ' + g.level, 38, 20);
+  ctx.fillText(t('lvl') + ' ' + g.level, 38, 20);
   // Yellow progress count under LVL label
   ctx.fillStyle = 'rgba(255,255,255,0.38)';
   ctx.font = '10px monospace';
@@ -457,12 +551,11 @@ function drawHUD(ctx, pal) {
 
   // Labels
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.font = '10px monospace';
+  ctx.font = uiFont(10);
   ctx.textAlign = 'left';
-  ctx.fillText('ECHO', CFG.ECHO_X - 18, 84);
+  ctx.fillText(t('echo'), CFG.ECHO_X - 18, 84);
   ctx.textAlign = 'right';
-  ctx.fillText('YOU', CFG.PLAYER_X + 18, 84);
-  // Divider arrow between them
+  ctx.fillText(t('you'), CFG.PLAYER_X + 18, 84);
   ctx.textAlign = 'center';
   ctx.fillText('← ' + Math.round(g.echoDelay / 100) / 10 + 's →', (CFG.ECHO_X + CFG.PLAYER_X) / 2, 84);
 }
@@ -528,56 +621,60 @@ function drawTitle(ctx) {
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.fillRect(0, 0, CFG.W, CFG.H);
   drawText5(ctx, 'ECHO', CFG.W / 2, 160, 9, '#58a6ff');
-  drawText5(ctx, 'RUNNER', CFG.W / 2, 220, 7, '#30a46c');
+  displayText(ctx, t('title2'), CFG.W / 2, 222, 7, '#30a46c');
   // Tagline
   ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  ctx.font = '13px monospace';
+  ctx.font = uiFont(13);
   ctx.textAlign = 'center';
-  ctx.fillText('Control your ECHO.', CFG.W / 2, 310);
-  ctx.fillText('Plan 2 seconds ahead.', CFG.W / 2, 328);
+  ctx.fillText(t('tagline1'), CFG.W / 2, 310);
+  ctx.fillText(t('tagline2'), CFG.W / 2, 328);
   // Blink prompt
   const alpha = 0.5 + 0.5 * Math.sin(Date.now() / 450);
   ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-  ctx.font = 'bold 15px monospace';
-  ctx.fillText('TAP TO START', CFG.W / 2, 410);
+  ctx.font = `bold 15px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
+  ctx.fillText(t('tapToPlay'), CFG.W / 2, 410);
   // Best score
   if (g.hi > 0) {
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = '12px monospace';
-    ctx.fillText('BEST: ' + g.hi, CFG.W / 2, 450);
+    ctx.font = uiFont(12);
+    ctx.fillText(t('best') + ': ' + g.hi, CFG.W / 2, 450);
   }
+  // Language toggle
+  drawLangToggle(ctx, LANG_BTN_Y_TITLE);
 }
 
 // ─── GAME OVER SCREEN ────────────────────────────────────────────────────────
 function drawGameOver(ctx) {
   ctx.fillStyle = 'rgba(0,0,0,0.68)';
   ctx.fillRect(0, 0, CFG.W, CFG.H);
-  drawText5(ctx, 'GAME', CFG.W / 2, 180, 8, '#f85149');
-  drawText5(ctx, 'OVER', CFG.W / 2, 232, 8, '#f85149');
+  displayText(ctx, t('go1'), CFG.W / 2, 180, 8, '#f85149');
+  displayText(ctx, t('go2'), CFG.W / 2, 232, 8, '#f85149');
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 22px monospace';
+  ctx.font = `bold 22px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
   ctx.textAlign = 'center';
-  ctx.fillText('SCORE: ' + g.score, CFG.W / 2, 316);
+  ctx.fillText(t('score') + ': ' + g.score, CFG.W / 2, 316);
   if (g.score > 0 && g.score >= g.hi) {
     ctx.fillStyle = '#ffd700';
-    ctx.font = '14px monospace';
-    ctx.fillText('NEW BEST!', CFG.W / 2, 338);
+    ctx.font = uiFont(14);
+    ctx.fillText(t('newBest'), CFG.W / 2, 338);
   }
   // Play again button
   ctx.fillStyle = '#238636';
   ctx.fillRect(CFG.W / 2 - 90, 370, 180, 44);
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 15px monospace';
-  ctx.fillText('PLAY AGAIN', CFG.W / 2, 397);
+  ctx.font = `bold 15px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
+  ctx.fillText(t('playAgain'), CFG.W / 2, 397);
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.font = '10px monospace';
-  ctx.fillText('(short ad may play)', CFG.W / 2, 428);
+  ctx.font = uiFont(10);
+  ctx.fillText(t('adNote'), CFG.W / 2, 428);
   // Home button
   ctx.fillStyle = 'rgba(255,255,255,0.1)';
   ctx.fillRect(CFG.W / 2 - 55, 442, 110, 36);
   ctx.fillStyle = 'rgba(255,255,255,0.65)';
-  ctx.font = '14px monospace';
-  ctx.fillText('HOME', CFG.W / 2, 465);
+  ctx.font = uiFont(14);
+  ctx.fillText(t('home'), CFG.W / 2, 465);
+  // Language toggle
+  drawLangToggle(ctx, LANG_BTN_Y_GO);
 }
 
 // ─── AD WAITING SCREEN ───────────────────────────────────────────────────────
@@ -585,9 +682,9 @@ function drawAdWait(ctx) {
   ctx.fillStyle = 'rgba(0,0,0,0.82)';
   ctx.fillRect(0, 0, CFG.W, CFG.H);
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.font = '14px monospace';
+  ctx.font = uiFont(14);
   ctx.textAlign = 'center';
-  ctx.fillText('Loading...', CFG.W / 2, CFG.H / 2);
+  ctx.fillText(t('loading'), CFG.W / 2, CFG.H / 2);
 }
 
 // ─── TUTORIAL PROMPTS ────────────────────────────────────────────────────────
@@ -598,21 +695,21 @@ function drawTutorial(ctx) {
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(20, CFG.H - 160, CFG.W - 40, 80);
     ctx.fillStyle = '#ffffff';
-    ctx.font = '13px monospace';
+    ctx.font = uiFont(13);
     ctx.textAlign = 'center';
-    ctx.fillText('TAP anywhere to switch lanes', CFG.W / 2, CFG.H - 130);
+    ctx.fillText(t('tut1a'), CFG.W / 2, CFG.H - 130);
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.fillText('Cycle: top → mid → bottom', CFG.W / 2, CFG.H - 110);
+    ctx.fillText(t('tut1b'), CFG.W / 2, CFG.H - 110);
   } else if (g.tutStep === 2) {
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(20, CFG.H - 180, CFG.W - 40, 96);
     ctx.fillStyle = '#e3b341';
-    ctx.font = '13px monospace';
+    ctx.font = uiFont(13);
     ctx.textAlign = 'center';
-    ctx.fillText('YELLOW = your ECHO scores it', CFG.W / 2, CFG.H - 150);
+    ctx.fillText(t('tut2a'), CFG.W / 2, CFG.H - 150);
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.fillText('Be in that lane NOW', CFG.W / 2, CFG.H - 130);
-    ctx.fillText('Echo follows 2 sec later!', CFG.W / 2, CFG.H - 110);
+    ctx.fillText(t('tut2b'), CFG.W / 2, CFG.H - 130);
+    ctx.fillText(t('tut2c'), CFG.W / 2, CFG.H - 110);
   }
 }
 
@@ -624,7 +721,7 @@ function drawOverlays(ctx, pal) {
     const yOff = (70 - g.comboTimer) * 0.5;
     const y = CFG.LANES[g.echoLane] - 30 - yOff;
     if (g.combo >= 3) {
-      drawText5(ctx, 'COMBO', CFG.ECHO_X, y - 20, 4, pal.yellow);
+      displayText(ctx, t('combo'), CFG.ECHO_X, y - 20, 4, pal.yellow);
       drawText5(ctx, '×' + g.combo, CFG.ECHO_X, y + 8, 5, '#ffffff');
     } else {
       drawText5(ctx, '+' + (CFG.PTS_YELLOW + (g.combo - 1) * CFG.PTS_COMBO), CFG.ECHO_X, y, 4, pal.yellow);
@@ -634,13 +731,13 @@ function drawOverlays(ctx, pal) {
   if (g.missTimer > 0) {
     const a = Math.min(1, g.missTimer / 20);
     ctx.globalAlpha = a;
-    drawText5(ctx, 'MISS', CFG.ECHO_X, CFG.LANES[g.echoLane] - 28, 4, pal.red);
+    displayText(ctx, t('miss'), CFG.ECHO_X, CFG.LANES[g.echoLane] - 28, 4, pal.red);
     ctx.globalAlpha = 1;
   }
   if (g.levelTimer > 0) {
     const a = Math.min(1, g.levelTimer / 30);
     ctx.globalAlpha = a;
-    drawText5(ctx, 'LEVEL ' + g.level, CFG.W / 2, CFG.H / 2 - 20, 5, pal.player);
+    displayText(ctx, t('level') + ' ' + g.level, CFG.W / 2, CFG.H / 2 - 20, 5, pal.player);
     ctx.globalAlpha = 1;
   }
   // Flash on lane switch
@@ -777,6 +874,8 @@ function onTap(e) {
   Audio.init();
 
   if (g.state === S.TITLE) {
+    const { lx, ly } = tapLogical(e);
+    if (checkLangToggle(lx, ly, LANG_BTN_Y_TITLE)) return;
     initGame();
     g.state = S.PLAYING;
     g.tutStep = 0;
@@ -794,6 +893,7 @@ function onTap(e) {
   }
 
   if (g.state === S.DEAD) {
+    if (checkLangToggle(lx, ly, LANG_BTN_Y_GO)) return;
     // HOME text button in game-over screen
     if (lx > CFG.W / 2 - 55 && lx < CFG.W / 2 + 55 && ly > 442 && ly < 478) {
       goHome();
@@ -845,6 +945,7 @@ function loop(ts) {
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
 
+  initLang();
   const saved = localStorage.getItem('echorunner_hi');
   g.hi = saved ? parseInt(saved, 10) : 0;
 
