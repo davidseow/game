@@ -9,7 +9,9 @@ const CFG = {
   BASE_SPEED: 2.5,
   SPEED_PER_LEVEL: 0.22,
   MAX_SPEED: 6.5,
-  ECHO_DELAY_MS: 2000,
+  ECHO_DELAY_START: 100,   // ms at level 1 (easy: echo follows almost instantly)
+  ECHO_DELAY_MAX: 2000,    // ms at level 20+ (hard: plan 2 seconds ahead)
+  ECHO_DELAY_STEP: 100,    // ms added per level
   HIST_CAP: 1800,
   COLL_HALF: 14,
   PTS_YELLOW: 10,
@@ -148,7 +150,7 @@ const g = {
   level: 1, combo: 0,
   yellows: 0,      // yellows scored this level
   speed: CFG.BASE_SPEED,
-  echoDelay: CFG.ECHO_DELAY_MS,
+  echoDelay: 100,
   frame: 0,
   nextSpawn: 60,
   deathTimer: 0,
@@ -174,7 +176,7 @@ function initGame() {
   g.playerLane = 1; g.echoLane = 1;
   g.score = 0; g.level = 1; g.combo = 0; g.yellows = 0;
   g.speed = CFG.BASE_SPEED;
-  g.echoDelay = CFG.ECHO_DELAY_MS;
+  g.echoDelay = CFG.ECHO_DELAY_START;
   g.frame = 0; g.nextSpawn = 60;
   g.deathTimer = 0; g.comboTimer = 0; g.missTimer = 0; g.levelTimer = 0; g.flashTimer = 0;
   g.palBlend = 1; g.prevPal = null;
@@ -196,7 +198,7 @@ function levelUp() {
   const newPalIdx  = Math.min(Math.floor((g.level - 1) / 5), 3);
   if (newPalIdx !== prevPalIdx) { g.prevPal = PALETTES[prevPalIdx]; g.palBlend = 0; }
   g.speed = Math.min(CFG.BASE_SPEED + (g.level - 1) * CFG.SPEED_PER_LEVEL, CFG.MAX_SPEED);
-  g.echoDelay = Math.max(1200, CFG.ECHO_DELAY_MS - (g.level - 1) * 60);
+  g.echoDelay = Math.min(CFG.ECHO_DELAY_MAX, CFG.ECHO_DELAY_START + (g.level - 1) * CFG.ECHO_DELAY_STEP);
   g.yellows = 0;
   g.levelTimer = 90;
   Audio.levelUp();
