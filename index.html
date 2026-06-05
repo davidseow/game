@@ -9,6 +9,17 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
   <title>ECHO RUNNER</title>
+  <!-- Firebase: replace placeholders with your project config -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script>
+    window._fbCfg = {
+      apiKey:      "YOUR_API_KEY",
+      authDomain:  "YOUR_PROJECT_ID.firebaseapp.com",
+      databaseURL: "YOUR_DB_URL",
+      projectId:   "YOUR_PROJECT_ID",
+    };
+  </script>
   <!-- Analytics: replace G-XXXXXXXXXX with your GA4 Measurement ID -->
   <!-- Free setup at analytics.google.com → Admin → Create Property -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
@@ -21,6 +32,17 @@
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
+  <div id="name-form" style="display:none">
+    <div class="nb">
+      <p id="nf-title">Enter your name</p>
+      <input id="nf-input" type="text" maxlength="12" autocomplete="off"
+             autocorrect="off" spellcheck="false" placeholder="MAX 12 CHARS">
+      <div class="nb-row">
+        <button id="nf-submit">SUBMIT</button>
+        <button id="nf-skip">SKIP</button>
+      </div>
+    </div>
+  </div>
   <script src="game.js"></script>
 </body>
 </html>
