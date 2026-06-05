@@ -86,6 +86,10 @@ const LANG = {
     leaderboard:'LEADERBOARD', back:'BACK', submitScore:'SUBMIT SCORE',
     enterName:'Enter your name', noScores:'No scores yet. Be first!',
     yourBest:'YOUR BEST', lv:'Lv', submitting:'Submitting…', submitted:'Submitted!',
+    howto:'HOW TO PLAY',
+    howto1:'Tap to switch lanes',
+    howto2:'Echo scores YELLOW · dodge RED',
+    howto3:'Echo mirrors you 2 sec behind',
   },
   zh: {
     title2:'跑者', tagline1:'控制你的回声。',
@@ -105,6 +109,10 @@ const LANG = {
     leaderboard:'排行榜', back:'返回', submitScore:'提交分数',
     enterName:'输入你的名字', noScores:'暂无记录，率先上榜！',
     yourBest:'你的最高分', lv:'关', submitting:'提交中…', submitted:'提交成功！',
+    howto:'玩法说明',
+    howto1:'点击切换跑道',
+    howto2:'回声击黄得分 · 躲开红色',
+    howto3:'回声延迟2秒跟随你',
   },
 };
 const ZH_FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif';
@@ -145,7 +153,7 @@ function displayText(ctx, text, cx, cy, scale, col) {
 }
 
 // EN | 中文 toggle rendered at given y-centre
-const LANG_BTN_Y_TITLE = 500;
+const LANG_BTN_Y_TITLE = 488;
 const LANG_BTN_Y_GO    = 502;
 
 function drawLangToggle(ctx, y) {
@@ -681,31 +689,47 @@ function drawLanes(ctx, pal) {
 function drawTitle(ctx) {
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.fillRect(0, 0, CFG.W, CFG.H);
-  drawText5(ctx, 'ECHO', CFG.W / 2, 160, 9, '#58a6ff');
-  displayText(ctx, t('title2'), CFG.W / 2, 222, 7, '#30a46c');
+  drawText5(ctx, 'ECHO', CFG.W / 2, 140, 9, '#58a6ff');
+  displayText(ctx, t('title2'), CFG.W / 2, 200, 7, '#30a46c');
   // Tagline
   ctx.fillStyle = 'rgba(255,255,255,0.75)';
   ctx.font = uiFont(13);
   ctx.textAlign = 'center';
-  ctx.fillText(t('tagline1'), CFG.W / 2, 310);
-  ctx.fillText(t('tagline2'), CFG.W / 2, 328);
+  ctx.fillText(t('tagline1'), CFG.W / 2, 268);
+  ctx.fillText(t('tagline2'), CFG.W / 2, 286);
+  // How to play box
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(20, 300, CFG.W - 40, 72);
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.strokeRect(20, 300, CFG.W - 40, 72);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = uiFont(10);
+  ctx.textAlign = 'center';
+  ctx.fillText(t('howto'), CFG.W / 2, 315);
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = uiFont(12);
+  ctx.fillText(t('howto1'), CFG.W / 2, 333);
+  ctx.fillText(t('howto2'), CFG.W / 2, 350);
+  ctx.fillText(t('howto3'), CFG.W / 2, 367);
   // Blink prompt
   const alpha = 0.5 + 0.5 * Math.sin(Date.now() / 450);
   ctx.fillStyle = `rgba(255,255,255,${alpha})`;
   ctx.font = `bold 15px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
-  ctx.fillText(t('tapToPlay'), CFG.W / 2, 400);
+  ctx.fillText(t('tapToPlay'), CFG.W / 2, 393);
   // Best score
   if (g.hi > 0) {
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = uiFont(12);
-    ctx.fillText(t('best') + ': ' + g.hi, CFG.W / 2, 440);
+    ctx.fillText(t('best') + ': ' + g.hi, CFG.W / 2, 424);
   }
   // Leaderboard button
   ctx.fillStyle = 'rgba(88,166,255,0.2)';
-  ctx.fillRect(CFG.W / 2 - 80, 458, 160, 32);
+  ctx.fillRect(CFG.W / 2 - 80, 440, 160, 32);
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.font = uiFont(13);
-  ctx.fillText(t('leaderboard'), CFG.W / 2, 479);
+  ctx.fillText(t('leaderboard'), CFG.W / 2, 461);
   // Language toggle
   drawLangToggle(ctx, LANG_BTN_Y_TITLE);
 }
@@ -1023,7 +1047,7 @@ function onTap(e) {
   if (g.state === S.TITLE) {
     const { lx, ly } = tapLogical(e);
     if (checkLangToggle(lx, ly, LANG_BTN_Y_TITLE)) return;
-    if (lx > CFG.W/2 - 80 && lx < CFG.W/2 + 80 && ly > 458 && ly < 490) {
+    if (lx > CFG.W/2 - 80 && lx < CFG.W/2 + 80 && ly > 440 && ly < 472) {
       fetchLeaderboard(); g.state = S.LEADERBOARD; return;
     }
     initGame();
