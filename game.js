@@ -65,6 +65,11 @@ const Audio = (() => {
   };
 })();
 
+// ─── ANALYTICS ──────────────────────────────────────────────────────────────
+function track(event, params = {}) {
+  if (typeof gtag === 'function') gtag('event', event, params);
+}
+
 // ─── PARTICLES ──────────────────────────────────────────────────────────────
 const POOL_SIZE = 180;
 const parts = Array.from({length: POOL_SIZE}, () => ({active:false,x:0,y:0,vx:0,vy:0,life:0,max:0,sz:0,col:'#fff'}));
@@ -155,6 +160,10 @@ const g = {
   missTimer: 0,
   levelTimer: 0,
   flashTimer: 0,  // white flash on switch
+  comboMax: 0,
+  sessionStart: 0,
+  tapCount: 0,
+  yellowsTotal: 0,
 };
 
 // ─── AD STUB ────────────────────────────────────────────────────────────────
@@ -171,15 +180,19 @@ function initGame() {
   g.palBlend = 1; g.prevPal = null;
   g.laneAnim.active = false; g.laneAnim.from = g.laneAnim.to = 1;
   g.echoAnim.active = false; g.echoAnim.from = g.echoAnim.to = 1;
+  g.comboMax = 0; g.tapCount = 0; g.yellowsTotal = 0;
+  g.sessionStart = performance.now();
   hist.clear();
   parts.forEach(p => p.active = false);
   obs.forEach(o => o.active = false);
+  track('game_start');
 }
 
 // ─── LEVEL UP ────────────────────────────────────────────────────────────────
 function levelUp() {
   const prevPalIdx = Math.min(Math.floor((g.level - 1) / 5), 3);
   g.level++;
+  track('level_up', { level: g.level });
   const newPalIdx  = Math.min(Math.floor((g.level - 1) / 5), 3);
   if (newPalIdx !== prevPalIdx) { g.prevPal = PALETTES[prevPalIdx]; g.palBlend = 0; }
   g.speed = Math.min(CFG.BASE_SPEED + (g.level - 1) * CFG.SPEED_PER_LEVEL, CFG.MAX_SPEED);
@@ -194,9 +207,16 @@ function scoreYellow(o) {
   o.active = false;
   g.combo++;
   g.yellows++;
+  g.yellowsTotal++;
+  if (g.combo > g.comboMax) g.comboMax = g.combo;
+  if (g.combo === 3 || g.combo === 5 || g.combo === 10) track('combo_milestone', { combo: g.combo });
   const pts = CFG.PTS_YELLOW + Math.max(0, g.combo - 1) * CFG.PTS_COMBO;
   g.score += pts;
-  if (g.score > g.hi) { g.hi = g.score; localStorage.setItem('echorunner_hi', g.hi); }
+  if (g.score > g.hi) {
+    g.hi = g.score;
+    localStorage.setItem('echorunner_hi', g.hi);
+    track('new_high_score', { score: g.hi });
+  }
   g.comboTimer = 70;
   const pal = getPal(g.level);
   const y = CFG.LANES[g.echoLane];
@@ -216,9 +236,19 @@ function die(who) {
   emit(x, y, pal.red, 28);
   emit(x, y, '#ffffff', 10);
   Audio.die();
+  track('game_over', {
+    score: g.score,
+    level: g.level,
+    death_by: who,
+    session_sec: Math.round((performance.now() - g.sessionStart) / 1000),
+    combo_max: g.comboMax,
+    taps: g.tapCount,
+    yellows_total: g.yellowsTotal,
+  });
   setTimeout(() => {
     g.state = S.AD;
-    window.showAd(() => { initGame(); g.state = S.PLAYING; });
+    track('ad_request');
+    window.showAd(() => { track('ad_complete'); initGame(); g.state = S.PLAYING; });
     setTimeout(() => { if (g.state === S.AD) { initGame(); g.state = S.PLAYING; } }, 10000);
   }, 900);
 }
@@ -663,7 +693,7 @@ function update(now) {
   if (!tDone) {
     if (g.tutStep === 0 && g.frame === 1) g.tutStep = 1;
     if (g.tutStep === 1 && g.frame > 180) g.tutStep = 2;
-    if (g.tutStep === 2 && g.yellows >= 1) { g.tutStep = 3; localStorage.setItem('echorunner_tutDone','1'); }
+    if (g.tutStep === 2 && g.yellows >= 1) { g.tutStep = 3; localStorage.setItem('echorunner_tutDone','1'); track('tutorial_complete'); }
   }
 }
 
@@ -697,6 +727,7 @@ function onTap(e) {
     g.playerLane = (g.playerLane + 1) % 3;
     g.laneAnim = { active: true, from: prev, to: g.playerLane, t: 0 };
     g.flashTimer = 8;
+    g.tapCount++;
     Audio.tap();
   }
 }
