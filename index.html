@@ -9,6 +9,15 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
   <title>ECHO RUNNER</title>
+  <!-- Analytics: replace G-XXXXXXXXXX with your GA4 Measurement ID -->
+  <!-- Free setup at analytics.google.com → Admin → Create Property -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX', { send_page_view: true });
+  </script>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
