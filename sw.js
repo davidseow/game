@@ -1,4 +1,4 @@
-const CACHE = 'echorunner-v1';
+const CACHE = 'echorunner-v2';
 const ASSETS = ['/', '/index.html', '/style.css', '/game.js', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -14,5 +14,21 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+  const url = new URL(e.request.url);
+  const isCode = url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html');
+  if (isCode) {
+    // Network-first for code files so updates are always picked up
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+  } else {
+    // Cache-first for static assets (images, fonts, manifest)
+    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+  }
 });
