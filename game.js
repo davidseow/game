@@ -420,9 +420,9 @@ function drawHUD(ctx, pal) {
   ctx.font = '12px monospace';
   ctx.textAlign = 'right';
   ctx.fillText('BEST ' + g.hi, CFG.W - 8, 20);
-  // Level
+  // Level (shifted right to clear home icon)
   ctx.textAlign = 'left';
-  ctx.fillText('LVL ' + g.level, 8, 20);
+  ctx.fillText('LVL ' + g.level, 38, 20);
   // Speed bar
   const frac = (g.speed - CFG.BASE_SPEED) / (CFG.MAX_SPEED - CFG.BASE_SPEED);
   ctx.fillStyle = 'rgba(255,255,255,0.12)';
@@ -439,6 +439,32 @@ function drawHUD(ctx, pal) {
   // Divider arrow between them
   ctx.textAlign = 'center';
   ctx.fillText('← ' + Math.round(g.echoDelay / 100) / 10 + 's →', (CFG.ECHO_X + CFG.PLAYER_X) / 2, 80);
+}
+
+// ─── HOME BUTTON ─────────────────────────────────────────────────────────────
+const HOME_BTN = { x: 2, y: 2, w: 30, h: 30 };
+
+function drawHomeBtn(ctx, pal) {
+  const bx = 6, by = 6;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(HOME_BTN.x, HOME_BTN.y, HOME_BTN.w, HOME_BTN.h);
+  ctx.fillStyle = pal.player;
+  // Roof — three rows forming a triangle
+  ctx.fillRect(bx + 7, by,     4, 3);
+  ctx.fillRect(bx + 4, by + 3, 10, 3);
+  ctx.fillRect(bx + 1, by + 6, 16, 3);
+  // Walls
+  ctx.fillRect(bx + 1, by + 9, 16, 9);
+  // Door cutout
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(bx + 7, by + 13, 5, 5);
+}
+
+function goHome() {
+  obs.forEach(o => o.active = false);
+  parts.forEach(p => p.active = false);
+  hist.clear();
+  g.state = S.TITLE;
 }
 
 // ─── BACKGROUND ──────────────────────────────────────────────────────────────
@@ -520,6 +546,12 @@ function drawGameOver(ctx) {
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.font = '10px monospace';
   ctx.fillText('(short ad may play)', CFG.W / 2, 428);
+  // Home button
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(CFG.W / 2 - 55, 442, 110, 36);
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.font = '14px monospace';
+  ctx.fillText('HOME', CFG.W / 2, 465);
 }
 
 // ─── AD WAITING SCREEN ───────────────────────────────────────────────────────
@@ -640,6 +672,9 @@ function render(ctx, now) {
 
   // Game over
   if (g.state === S.DEAD) drawGameOver(ctx);
+
+  // Home button — always on top during active play/dead states
+  if (g.state === S.PLAYING || g.state === S.DEAD) drawHomeBtn(ctx, pal);
 }
 
 function easeOut(t) { return 1 - (1 - t) * (1 - t); }
@@ -700,6 +735,17 @@ function update(now) {
 }
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
+function tapLogical(e) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr  = window.devicePixelRatio || 1;
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  const physX = (cx - rect.left) * dpr;
+  const physY = (cy - rect.top)  * dpr;
+  const scale = Math.min(canvas.width / CFG.W, canvas.height / CFG.H);
+  return { lx: (physX - offX) / scale, ly: (physY - offY) / scale };
+}
+
 function onTap(e) {
   e.preventDefault();
   Audio.init();
@@ -711,16 +757,22 @@ function onTap(e) {
     return;
   }
 
+  const { lx, ly } = tapLogical(e);
+
+  // Home button (top-left 30×30) — checked first in all active states
+  if ((g.state === S.PLAYING || g.state === S.DEAD)
+      && lx >= HOME_BTN.x && lx <= HOME_BTN.x + HOME_BTN.w
+      && ly >= HOME_BTN.y && ly <= HOME_BTN.y + HOME_BTN.h) {
+    goHome();
+    return;
+  }
+
   if (g.state === S.DEAD) {
-    // Hit-test play again button (logical coords)
-    const rect = canvas.getBoundingClientRect();
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    const lx = (cx - rect.left) / rect.width  * CFG.W;
-    const ly = (cy - rect.top)  / rect.height * CFG.H;
-    if (lx > CFG.W/2 - 90 && lx < CFG.W/2 + 90 && ly > 370 && ly < 414) {
-      // handled by die() timeout — just visually press
+    // HOME text button in game-over screen
+    if (lx > CFG.W / 2 - 55 && lx < CFG.W / 2 + 55 && ly > 442 && ly < 478) {
+      goHome();
     }
+    // PLAY AGAIN button handled by die() timeout — tap is a no-op here
     return;
   }
 
