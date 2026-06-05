@@ -423,22 +423,48 @@ function drawHUD(ctx, pal) {
   // Level (shifted right to clear home icon)
   ctx.textAlign = 'left';
   ctx.fillText('LVL ' + g.level, 38, 20);
+  // Yellow progress count under LVL label
+  ctx.fillStyle = 'rgba(255,255,255,0.38)';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(g.yellows + '/' + CFG.LEVEL_YELLOWS, 38, 32);
+
   // Speed bar
   const frac = (g.speed - CFG.BASE_SPEED) / (CFG.MAX_SPEED - CFG.BASE_SPEED);
   ctx.fillStyle = 'rgba(255,255,255,0.12)';
   ctx.fillRect(0, 50, CFG.W, 3);
   ctx.fillStyle = pal.trail;
   ctx.fillRect(0, 50, CFG.W * Math.min(frac, 1), 3);
+
+  // Level progress bar (segmented, yellow)
+  const lvlFrac = g.yellows / CFG.LEVEL_YELLOWS;
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  ctx.fillRect(0, 55, CFG.W, 5);
+  ctx.fillStyle = pal.yellow;
+  ctx.fillRect(0, 55, Math.round(CFG.W * lvlFrac), 5);
+  // Segment dividers (one per yellow)
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  for (let i = 1; i < CFG.LEVEL_YELLOWS; i++) {
+    ctx.fillRect(Math.round(CFG.W * i / CFG.LEVEL_YELLOWS), 55, 2, 5);
+  }
+  // Pulse the last segment when one yellow away
+  if (g.yellows === CFG.LEVEL_YELLOWS - 1) {
+    const pulse = 0.4 + 0.4 * Math.sin(Date.now() / 150);
+    ctx.fillStyle = `rgba(255,255,255,${pulse})`;
+    ctx.fillRect(Math.round(CFG.W * (CFG.LEVEL_YELLOWS - 1) / CFG.LEVEL_YELLOWS), 55,
+                 Math.round(CFG.W / CFG.LEVEL_YELLOWS), 5);
+  }
+
   // Labels
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.font = '10px monospace';
   ctx.textAlign = 'left';
-  ctx.fillText('ECHO', CFG.ECHO_X - 18, 80);
+  ctx.fillText('ECHO', CFG.ECHO_X - 18, 84);
   ctx.textAlign = 'right';
-  ctx.fillText('YOU', CFG.PLAYER_X + 18, 80);
+  ctx.fillText('YOU', CFG.PLAYER_X + 18, 84);
   // Divider arrow between them
   ctx.textAlign = 'center';
-  ctx.fillText('← ' + Math.round(g.echoDelay / 100) / 10 + 's →', (CFG.ECHO_X + CFG.PLAYER_X) / 2, 80);
+  ctx.fillText('← ' + Math.round(g.echoDelay / 100) / 10 + 's →', (CFG.ECHO_X + CFG.PLAYER_X) / 2, 84);
 }
 
 // ─── HOME BUTTON ─────────────────────────────────────────────────────────────
