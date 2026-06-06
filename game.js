@@ -44,9 +44,10 @@ function lerpHex(a, b, t) {
 // ─── AUDIO ──────────────────────────────────────────────────────────────────
 const Audio = (() => {
   let ctx = null;
+  let sfxOn = true;
   function init() { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); }
   function tone(freq, type, dur, gain, when = 0) {
-    if (!ctx) return;
+    if (!sfxOn || !ctx) return;
     const t = ctx.currentTime + when;
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.connect(g); g.connect(ctx.destination);
@@ -58,6 +59,19 @@ const Audio = (() => {
   }
   return {
     init,
+    isOn()   { return sfxOn; },
+    toggle() {
+      sfxOn = !sfxOn;
+      localStorage.setItem('echorunner_sfx', sfxOn ? '1' : '0');
+      const url = new URL(window.location);
+      url.searchParams.set('sfx', sfxOn ? '1' : '0');
+      window.history.replaceState({}, '', url);
+      return sfxOn;
+    },
+    initSfx() {
+      const p = new URLSearchParams(window.location.search).get('sfx');
+      sfxOn = p === '0' ? false : p === '1' ? true : localStorage.getItem('echorunner_sfx') !== '0';
+    },
     tap()     { tone(620, 'square', 0.04, 0.12); },
     score()   { tone(523, 'sine', 0.15, 0.2); tone(659, 'sine', 0.15, 0.2, 0.07); },
     combo()   { [523,659,784,1047].forEach((f,i) => tone(f,'sine',0.2,0.22,i*0.07)); },
@@ -631,6 +645,7 @@ function drawHUD(ctx, pal) {
 
 // ─── HOME BUTTON ─────────────────────────────────────────────────────────────
 const HOME_BTN = { x: 2, y: 2, w: 30, h: 30 };
+const SFX_BTN  = { x: CFG.W - 32, y: 2, w: 30, h: 30 };
 
 function drawHomeBtn(ctx, pal) {
   const bx = 6, by = 6;
@@ -646,6 +661,35 @@ function drawHomeBtn(ctx, pal) {
   // Door cutout
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.fillRect(bx + 7, by + 13, 5, 5);
+}
+
+function drawSfxBtn(ctx) {
+  const { x, y } = SFX_BTN;
+  const on = Audio.isOn();
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(x, y, 30, 30);
+  const bx = x + 7, by = y + 7;
+  ctx.fillStyle = on ? 'rgba(255,255,255,0.8)' : 'rgba(255,100,100,0.6)';
+  // Speaker body
+  ctx.fillRect(bx,     by + 4, 4, 8);
+  // Speaker cone (stepped triangle)
+  ctx.fillRect(bx + 4, by + 2, 2, 2);
+  ctx.fillRect(bx + 4, by + 4, 5, 8);
+  ctx.fillRect(bx + 4, by + 12, 2, 2);
+  if (on) {
+    // Sound waves
+    ctx.fillRect(bx + 10, by + 3,  2, 3);
+    ctx.fillRect(bx + 10, by + 10, 2, 3);
+    ctx.fillRect(bx + 13, by + 1,  2, 5);
+    ctx.fillRect(bx + 13, by + 10, 2, 5);
+  } else {
+    // Strike-through X
+    ctx.fillStyle = 'rgba(255,60,60,0.95)';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(bx + i * 4,      by + i * 4,      3, 3);
+      ctx.fillRect(bx + 12 - i * 4, by + i * 4,      3, 3);
+    }
+  }
 }
 
 function goHome() {
@@ -924,8 +968,8 @@ function render(ctx, now) {
   const pal = getPal(g.level);
   drawBackground(ctx, pal);
 
-  if (g.state === S.LEADERBOARD) { drawLeaderboard(ctx); return; }
-  if (g.state === S.TITLE) { drawTitle(ctx); return; }
+  if (g.state === S.LEADERBOARD) { drawLeaderboard(ctx); drawSfxBtn(ctx); return; }
+  if (g.state === S.TITLE) { drawTitle(ctx); drawSfxBtn(ctx); return; }
   if (g.state === S.AD)    { drawAdWait(ctx); return; }
 
   drawLanes(ctx, pal);
@@ -967,8 +1011,8 @@ function render(ctx, now) {
   // Game over
   if (g.state === S.DEAD) drawGameOver(ctx);
 
-  // Home button — always on top during active play/dead states
-  if (g.state === S.PLAYING || g.state === S.DEAD) drawHomeBtn(ctx, pal);
+  // Home + SFX buttons — always on top during active play/dead states
+  if (g.state === S.PLAYING || g.state === S.DEAD) { drawHomeBtn(ctx, pal); drawSfxBtn(ctx); }
 }
 
 function easeOut(t) { return 1 - (1 - t) * (1 - t); }
@@ -1047,6 +1091,7 @@ function onTap(e) {
   if (g.state === S.TITLE) {
     const { lx, ly } = tapLogical(e);
     if (checkLangToggle(lx, ly, LANG_BTN_Y_TITLE)) return;
+    if (lx >= SFX_BTN.x && lx <= SFX_BTN.x + SFX_BTN.w && ly >= SFX_BTN.y && ly <= SFX_BTN.y + SFX_BTN.h) { Audio.toggle(); return; }
     if (lx > CFG.W/2 - 80 && lx < CFG.W/2 + 80 && ly > 440 && ly < 472) {
       fetchLeaderboard(); g.state = S.LEADERBOARD; return;
     }
@@ -1057,6 +1102,9 @@ function onTap(e) {
   }
 
   const { lx, ly } = tapLogical(e);
+
+  // SFX toggle — top-right corner, all non-title states
+  if (lx >= SFX_BTN.x && lx <= SFX_BTN.x + SFX_BTN.w && ly >= SFX_BTN.y && ly <= SFX_BTN.y + SFX_BTN.h) { Audio.toggle(); return; }
 
   if (g.state === S.LEADERBOARD) {
     if (lx > CFG.W/2 - 70 && lx < CFG.W/2 + 70 && ly > 572 && ly < 608) { g.state = S.TITLE; }
@@ -1124,6 +1172,7 @@ function loop(ts) {
   window.addEventListener('resize', resizeCanvas);
 
   initLang();
+  Audio.initSfx();
   const saved = localStorage.getItem('echorunner_hi');
   g.hi = saved ? parseInt(saved, 10) : 0;
 
