@@ -219,11 +219,13 @@ async function fetchLeaderboard() {
   if (!fbEnabled()) return;
   g.lb.loading = true;
   try {
-    const snap = await _db.ref('leaderboard').orderByChild('score').limitToLast(20).get();
+    const snap = await _db.ref('leaderboard').orderByChild('score').limitToLast(25).get();
     const arr = [];
-    snap.forEach(c => arr.push(c.val()));
+    // Use block body — arr.push() returns the new length (truthy), which would
+    // cause Firebase DataSnapshot.forEach to cancel early if returned implicitly.
+    snap.forEach(c => { arr.push(c.val()); });
     g.lb.entries = arr.sort((a, b) => b.score - a.score);
-  } catch(e) {}
+  } catch(e) { console.error('fetchLeaderboard:', e); }
   g.lb.loading = false;
 }
 
@@ -587,24 +589,24 @@ function drawText5(ctx, text, cx, cy, scale, col) {
 
 // ─── HUD ─────────────────────────────────────────────────────────────────────
 function drawHUD(ctx, pal) {
-  // Score
+  // Score — nudged down to sit clear of the button row (y 2–32)
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 26px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText(g.score, CFG.W / 2, 36);
-  // Best
+  ctx.fillText(g.score, CFG.W / 2, 44);
+  // Best — right-aligned to SFX_BTN.x - 8 so it never overlaps the speaker button
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
   ctx.font = uiFont(12);
   ctx.textAlign = 'right';
-  ctx.fillText(t('best') + ' ' + g.hi, CFG.W - 8, 20);
+  ctx.fillText(t('best') + ' ' + g.hi, SFX_BTN.x - 8, 24);
   // Level (shifted right to clear home icon)
   ctx.textAlign = 'left';
-  ctx.fillText(t('lvl') + ' ' + g.level, 38, 20);
+  ctx.fillText(t('lvl') + ' ' + g.level, 38, 24);
   // Yellow progress count under LVL label
   ctx.fillStyle = 'rgba(255,255,255,0.38)';
   ctx.font = '10px monospace';
   ctx.textAlign = 'left';
-  ctx.fillText(g.yellows + '/' + CFG.LEVEL_YELLOWS, 38, 32);
+  ctx.fillText(g.yellows + '/' + CFG.LEVEL_YELLOWS, 38, 36);
 
   // Speed bar
   const frac = (g.speed - CFG.BASE_SPEED) / (CFG.MAX_SPEED - CFG.BASE_SPEED);
@@ -852,7 +854,7 @@ function drawLeaderboard(ctx) {
     ctx.fillText(t('noScores'), CFG.W / 2, CFG.H / 2);
   } else {
     const rowH = 24, startY = 46;
-    for (let i = 0; i < Math.min(20, g.lb.entries.length); i++) {
+    for (let i = 0; i < Math.min(25, g.lb.entries.length); i++) {
       const entry = g.lb.entries[i];
       const ry = startY + i * rowH;
       if (i % 2 === 0) {
