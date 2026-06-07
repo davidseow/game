@@ -63,7 +63,7 @@ Level-ups trigger every 12 yellows scored. Each level increases obstacle speed (
 ## PWA Setup
 
 - `manifest.json`: Makes the game installable (standalone display mode, dark theme).
-- `sw.js`: Service worker under cache key `echorunner-v2`. Uses **network-first** for `.js`/`.css`/`.html` (so code updates are always fetched fresh) and cache-first for everything else. When deploying, bump the version constant in `sw.js` to purge old caches.
+- `sw.js`: Service worker under cache key `echorunner-v3`. Uses **network-first** for `.js`/`.css`/`.html` (so code updates are always fetched fresh) and cache-first for everything else. When deploying, bump the version constant in `sw.js` to purge old caches.
 
 ## Key Conventions
 
