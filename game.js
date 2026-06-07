@@ -89,7 +89,7 @@ function track(event, params = {}) {
 // ─── I18N ────────────────────────────────────────────────────────────────────
 const LANG = {
   en: {
-    title2:'RUNNER', tagline1:'Control your ECHO.', tagline2:'Plan 2 seconds ahead.',
+    title2:'RUNNER', tagline1:'Control your ECHO.', tagline2:'Delay grows each level.',
     tapToPlay:'TAP TO PLAY', best:'BEST', lvl:'LVL', echo:'ECHO', you:'YOU',
     go1:'GAME', go2:'OVER', score:'SCORE', newBest:'NEW BEST!',
     playAgain:'PLAY AGAIN', adNote:'(short ad may play)', home:'HOME',
@@ -103,11 +103,11 @@ const LANG = {
     howto:'HOW TO PLAY',
     howto1:'Tap to switch lanes',
     howto2:'Echo scores YELLOW · dodge RED',
-    howto3:'Echo mirrors you 2 sec behind',
+    howto3:'Echo delay grows as you level up',
   },
   zh: {
     title2:'跑者', tagline1:'控制你的回声。',
-    tagline2:'提前两秒规划路线。',
+    tagline2:'延迟随关卡增加。',
     tapToPlay:'点击开始', best:'最高分', lvl:'关卡',
     echo:'回声', you:'你',
     go1:'游戏', go2:'结束', score:'得分',
@@ -126,7 +126,7 @@ const LANG = {
     howto:'玩法说明',
     howto1:'点击切换跑道',
     howto2:'回声击黄得分 · 躲开红色',
-    howto3:'回声延迟2秒跟随你',
+    howto3:'回声延迟随关卡增加',
   },
 };
 const ZH_FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif';
