@@ -25,7 +25,7 @@ Open `http://localhost:8080` in a browser. There are no tests, no linting tools,
 All game logic is in `game.js` (~749 lines), organized top-to-bottom in these sections:
 
 ### CONFIG (top of file)
-Central constants for canvas dimensions (360×640), lane Y-positions (`[160, 290, 420]`), player/echo X-positions, speed ranges, scoring, and the **2000ms echo delay**. Tuning gameplay feel starts here.
+Central constants for canvas dimensions (360×640), lane Y-positions (`[160, 290, 420]`), player/echo X-positions, speed ranges, scoring, and the echo delay ramp (`ECHO_DELAY_START`/`ECHO_DELAY_MAX`/`ECHO_DELAY_STEP`). Tuning gameplay feel starts here.
 
 ### Core Systems (in order of definition)
 
@@ -40,13 +40,13 @@ Central constants for canvas dimensions (360×640), lane Y-positions (`[160, 290
 
 ### Game Loop (`loop` → `update` → `render`)
 
-- **`update(now)`**: Pushes current player lane to history, queries echo lane 2000ms back, moves obstacles, checks collisions, spawns new obstacles, updates animations.
+- **`update(now)`**: Pushes current player lane to history, queries echo lane `ECHO_DELAY_MS` back (grows each level), moves obstacles, checks collisions, spawns new obstacles, updates animations.
 - **`render(ctx, now)`**: Draws background, lanes, obstacles (with glow/pulse effects), characters (pixel-art with animated legs), prediction trail (8-step lookahead), and HUD.
 - **`loop(ts)`**: `requestAnimationFrame` wrapper calling both.
 
 ### The Echo Mechanic
 
-The defining mechanic: the echo character mirrors whatever lane the player chose 2 seconds ago. This is implemented entirely through `hist.queryAt(now - ECHO_DELAY_MS)`. As levels increase, `ECHO_DELAY_MS` tightens toward a minimum (1200ms), increasing difficulty.
+The defining mechanic: the echo character mirrors whatever lane the player chose N milliseconds ago, implemented via `hist.queryAt(now - ECHO_DELAY_MS)`. Difficulty ramps by *increasing* the delay: it starts at `ECHO_DELAY_START` (100ms, nearly instant) and grows by `ECHO_DELAY_STEP` (100ms) per level up to `ECHO_DELAY_MAX` (2000ms)—forcing the player to plan further ahead.
 
 ### Input
 
@@ -63,7 +63,7 @@ Level-ups trigger every 12 yellows scored. Each level increases obstacle speed (
 ## PWA Setup
 
 - `manifest.json`: Makes the game installable (standalone display mode, dark theme).
-- `sw.js`: Cache-first service worker under key `echorunner-v1`. When updating cached assets, bump the version key in `sw.js`.
+- `sw.js`: Service worker under cache key `echorunner-v2`. Uses **network-first** for `.js`/`.css`/`.html` (so code updates are always fetched fresh) and cache-first for everything else. When deploying, bump the version constant in `sw.js` to purge old caches.
 
 ## Key Conventions
 
