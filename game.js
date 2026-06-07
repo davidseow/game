@@ -1192,7 +1192,7 @@ function loop(ts) {
   };
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/game/sw.js').catch(() => {});
   }
 
   g.state = S.TITLE;
