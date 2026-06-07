@@ -45,6 +45,10 @@ function lerpHex(a, b, t) {
 const Audio = (() => {
   let ctx = null;
   let sfxOn = true;
+  let musicInterval = null;
+  let musicStep = 0;
+  const MUSIC_NOTES = [261, 329, 392, 523];
+
   function init() { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); }
   function tone(freq, type, dur, gain, when = 0) {
     if (!sfxOn || !ctx) return;
@@ -57,11 +61,43 @@ const Audio = (() => {
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     o.start(t); o.stop(t + dur);
   }
+
+  function stopMusic() {
+    if (musicInterval) { clearInterval(musicInterval); musicInterval = null; }
+  }
+
+  function startMusic(bpm = 120) {
+    stopMusic();
+    if (!sfxOn || !ctx) return;
+    const stepMs = (60 / bpm) * 500;
+    const delayNode = ctx.createDelay(1.0);
+    delayNode.delayTime.value = 60 / bpm;
+    const feedbackGain = ctx.createGain(); feedbackGain.gain.value = 0.32;
+    const masterGain = ctx.createGain(); masterGain.gain.value = 0.07;
+    delayNode.connect(feedbackGain); feedbackGain.connect(delayNode);
+    delayNode.connect(masterGain); masterGain.connect(ctx.destination);
+    musicStep = 0;
+    musicInterval = setInterval(() => {
+      if (!sfxOn) { stopMusic(); return; }
+      const osc = ctx.createOscillator();
+      const envGain = ctx.createGain();
+      osc.frequency.value = MUSIC_NOTES[musicStep % MUSIC_NOTES.length];
+      osc.type = 'triangle';
+      const dur = stepMs / 1000 * 0.85;
+      envGain.gain.setValueAtTime(0.5, ctx.currentTime);
+      envGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+      osc.connect(envGain); envGain.connect(delayNode);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + dur);
+      musicStep++;
+    }, stepMs);
+  }
+
   return {
     init,
     isOn()   { return sfxOn; },
     toggle() {
       sfxOn = !sfxOn;
+      if (!sfxOn) stopMusic();
       localStorage.setItem('echorunner_sfx', sfxOn ? '1' : '0');
       const url = new URL(window.location);
       url.searchParams.set('sfx', sfxOn ? '1' : '0');
@@ -72,18 +108,25 @@ const Audio = (() => {
       const p = new URLSearchParams(window.location.search).get('sfx');
       sfxOn = p === '0' ? false : p === '1' ? true : localStorage.getItem('echorunner_sfx') !== '0';
     },
-    tap()     { tone(620, 'square', 0.04, 0.12); },
-    score()   { tone(523, 'sine', 0.15, 0.2); tone(659, 'sine', 0.15, 0.2, 0.07); },
-    combo()   { [523,659,784,1047].forEach((f,i) => tone(f,'sine',0.2,0.22,i*0.07)); },
-    miss()    { tone(300, 'sawtooth', 0.18, 0.15); tone(200, 'sawtooth', 0.18, 0.1, 0.09); },
-    die()     { tone(330,'sawtooth',0.5,0.3); tone(220,'sawtooth',0.5,0.2,0.1); tone(110,'sawtooth',0.4,0.15,0.25); },
-    levelUp() { [392,523,659,784].forEach((f,i) => tone(f,'square',0.18,0.2,i*0.09)); },
+    tap()       { tone(620, 'square', 0.04, 0.12); },
+    score()     { tone(523, 'sine', 0.15, 0.2); tone(659, 'sine', 0.15, 0.2, 0.07); },
+    combo()     { [523,659,784,1047].forEach((f,i) => tone(f,'sine',0.2,0.22,i*0.07)); },
+    miss()      { tone(300, 'sawtooth', 0.18, 0.15); tone(200, 'sawtooth', 0.18, 0.1, 0.09); },
+    die()       { tone(330,'sawtooth',0.5,0.3); tone(220,'sawtooth',0.5,0.2,0.1); tone(110,'sawtooth',0.4,0.15,0.25); },
+    levelUp()   { [392,523,659,784].forEach((f,i) => tone(f,'square',0.18,0.2,i*0.09)); },
+    startMusic,
+    stopMusic,
   };
 })();
 
 // ─── ANALYTICS ──────────────────────────────────────────────────────────────
 function track(event, params = {}) {
   if (typeof gtag === 'function') gtag('event', event, params);
+}
+
+// ─── HAPTIC FEEDBACK ─────────────────────────────────────────────────────────
+function haptic(pattern) {
+  if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
 // ─── I18N ────────────────────────────────────────────────────────────────────
@@ -167,7 +210,7 @@ function displayText(ctx, text, cx, cy, scale, col) {
 }
 
 // EN | 中文 toggle rendered at given y-centre
-const LANG_BTN_Y_TITLE = 488;
+const LANG_BTN_Y_TITLE = 520;
 const LANG_BTN_Y_GO    = 502;
 
 function drawLangToggle(ctx, y) {
@@ -234,8 +277,11 @@ async function submitScore(name, score, level) {
   const clean = sanitizeName(name);
   if (!clean) return;
   g.lb.submitState = 'submitting';
+  const path = g.dailyMode
+    ? 'daily/' + new Date().toISOString().slice(0, 10)
+    : 'leaderboard';
   try {
-    await _db.ref('leaderboard').push({ name: clean, score, level, ts: Date.now() });
+    await _db.ref(path).push({ name: clean, score, level, ts: Date.now() });
     g.lb.submitState = 'done';
     fetchLeaderboard();
   } catch(e) { g.lb.submitState = 'error'; }
@@ -248,6 +294,17 @@ function showNameForm() {
   document.getElementById('name-form').style.display = 'flex';
   setTimeout(() => document.getElementById('nf-input').focus(), 100);
 }
+
+// ─── SEEDED PRNG (for daily challenge) ───────────────────────────────────────
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+let dailyRng = null;
 
 // ─── PARTICLES ──────────────────────────────────────────────────────────────
 const POOL_SIZE = 180;
@@ -316,6 +373,34 @@ function spawnObs(lane, type) {
   }
 }
 
+// ─── ACHIEVEMENTS ────────────────────────────────────────────────────────────
+const ACHIEVEMENTS = [
+  { id: 'first_blood', label: 'FIRST BLOOD', check: s => s.yellowsTotal >= 1 },
+  { id: 'echo_master', label: 'ECHO MASTER', check: s => s.level >= 5 },
+  { id: 'time_lord',   label: 'TIME LORD',   check: s => s.echoDelay >= 2000 },
+  { id: 'combo_king',  label: 'COMBO KING',  check: s => s.combo >= 10 },
+  { id: 'speedster',   label: 'SPEEDSTER',   check: s => s.speed >= CFG.MAX_SPEED },
+  { id: 'survivor',    label: 'SURVIVOR',    check: s => s.level >= 10 },
+];
+
+function checkAchievements() {
+  let unlocked;
+  try { unlocked = JSON.parse(localStorage.getItem('echorunner_ach') || '[]'); }
+  catch(e) { unlocked = []; }
+  for (const ach of ACHIEVEMENTS) {
+    if (!unlocked.includes(ach.id) && ach.check(g)) {
+      unlocked.push(ach.id);
+      localStorage.setItem('echorunner_ach', JSON.stringify(unlocked));
+      g.achTimer = 120;
+      g.achLabel = ach.label;
+      const pal = getPal(g.level);
+      emit(CFG.W / 2, CFG.H / 3, pal.yellow, 16, true);
+      Audio.levelUp();
+      break;
+    }
+  }
+}
+
 // ─── GAME STATE ──────────────────────────────────────────────────────────────
 const S = { TITLE:'TITLE', PLAYING:'PLAYING', DEAD:'DEAD', AD:'AD', LEADERBOARD:'LEADERBOARD' };
 
@@ -344,7 +429,43 @@ const g = {
   tapCount: 0,
   yellowsTotal: 0,
   lb: { entries: [], loading: false, submitState: 'idle' },
+  shakeFrames: 0, shakeMag: 0,
+  achTimer: 0, achLabel: '',
+  dailyMode: false, dailyDate: '',
 };
+
+// ─── SHARE SCORE ─────────────────────────────────────────────────────────────
+async function shareScore() {
+  const offscreen = document.createElement('canvas');
+  offscreen.width = 360; offscreen.height = 200;
+  const oc = offscreen.getContext('2d');
+  const pal = getPal(g.level);
+  const grad = oc.createLinearGradient(0, 0, 0, 200);
+  grad.addColorStop(0, pal.bg1); grad.addColorStop(1, pal.bg2);
+  oc.fillStyle = grad; oc.fillRect(0, 0, 360, 200);
+  drawText5(oc, 'ECHO', 180, 20, 5, pal.player);
+  drawText5(oc, 'RUNNER', 180, 52, 3, pal.echo);
+  oc.fillStyle = '#ffffff'; oc.font = 'bold 32px monospace';
+  oc.textAlign = 'center'; oc.fillText(g.score, 180, 114);
+  oc.fillStyle = 'rgba(255,255,255,0.6)'; oc.font = '11px monospace';
+  oc.fillText('LVL ' + g.level + '  ·  ' + (Math.round(g.echoDelay / 100) / 10) + 's ECHO  ·  ×' + g.comboMax + ' COMBO', 180, 142);
+  oc.fillStyle = 'rgba(255,255,255,0.28)'; oc.font = '9px monospace';
+  oc.fillText('echo-runner', 180, 172);
+  try {
+    const blob = await new Promise(r => offscreen.toBlob(r, 'image/png'));
+    if (!blob || blob.size === 0) throw new Error('empty');
+    const file = new File([blob], 'echo-runner.png', { type: 'image/png' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ title: 'Echo Runner', files: [file] });
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'echo-runner.png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }
+  } catch(e) { /* user cancelled or not supported */ }
+}
 
 // ─── AD STUB ────────────────────────────────────────────────────────────────
 window.showAd = window.showAd || function(cb) { setTimeout(cb, 0); };
@@ -361,6 +482,8 @@ function initGame() {
   g.laneAnim.active = false; g.laneAnim.from = g.laneAnim.to = 1;
   g.echoAnim.active = false; g.echoAnim.from = g.echoAnim.to = 1;
   g.comboMax = 0; g.tapCount = 0; g.yellowsTotal = 0; g.lb.submitState = 'idle';
+  g.shakeFrames = 0; g.shakeMag = 0;
+  g.achTimer = 0; g.achLabel = '';
   g.sessionStart = performance.now();
   hist.clear();
   parts.forEach(p => p.active = false);
@@ -380,6 +503,7 @@ function levelUp() {
   g.yellows = 0;
   g.levelTimer = 90;
   Audio.levelUp();
+  haptic([30, 30, 30, 30, 60]);
 }
 
 // ─── SCORE YELLOW ────────────────────────────────────────────────────────────
@@ -398,10 +522,17 @@ function scoreYellow(o) {
     track('new_high_score', { score: g.hi });
   }
   g.comboTimer = 70;
+  haptic(g.combo >= 3 ? [15, 10, 15] : 15);
   const pal = getPal(g.level);
   const y = CFG.LANES[g.echoLane];
   emit(CFG.ECHO_X, y, pal.yellow, g.combo >= 3 ? 22 : 12, true);
-  if (g.combo >= 3) Audio.combo(); else Audio.score();
+  if (g.combo >= 3) {
+    Audio.combo();
+    g.shakeFrames = Math.max(g.shakeFrames, 6);
+    g.shakeMag = Math.max(g.shakeMag, 4);
+  } else {
+    Audio.score();
+  }
   if (g.yellows >= CFG.LEVEL_YELLOWS) levelUp();
 }
 
@@ -410,6 +541,8 @@ function die(who) {
   if (g.state !== S.PLAYING) return;
   g.state = S.DEAD;
   g.deathTimer = 80;
+  g.shakeFrames = 12; g.shakeMag = 8;
+  haptic([200, 50, 80]);
   const pal = getPal(g.level);
   const x = who === 'player' ? CFG.PLAYER_X : CFG.ECHO_X;
   const y = CFG.LANES[who === 'player' ? g.playerLane : g.echoLane];
@@ -430,8 +563,8 @@ function die(who) {
 function triggerPlayAgain() {
   g.state = S.AD;
   track('ad_request');
-  window.showAd(() => { track('ad_complete'); initGame(); g.state = S.PLAYING; });
-  setTimeout(() => { if (g.state === S.AD) { initGame(); g.state = S.PLAYING; } }, 10000);
+  window.showAd(() => { track('ad_complete'); initGame(); g.state = S.PLAYING; Audio.startMusic(); });
+  setTimeout(() => { if (g.state === S.AD) { initGame(); g.state = S.PLAYING; Audio.startMusic(); } }, 10000);
 }
 
 // ─── COLLISIONS ──────────────────────────────────────────────────────────────
@@ -454,11 +587,10 @@ function checkCollisions() {
 // ─── SPAWN LOGIC ─────────────────────────────────────────────────────────────
 function trySpawn() {
   if (g.frame < g.nextSpawn) return;
-  const pal = getPal(g.level);
-  // Yellow ratio decreases with level
+  const rng = (g.dailyMode && dailyRng) ? dailyRng : Math.random.bind(Math);
   const yellowChance = Math.max(0.4, 0.65 - (g.level - 1) * 0.02);
-  const type = Math.random() < yellowChance ? 'yellow' : 'red';
-  const lane = Math.floor(Math.random() * 3);
+  const type = rng() < yellowChance ? 'yellow' : 'red';
+  const lane = Math.floor(rng() * 3);
   spawnObs(lane, type);
   const interval = Math.max(CFG.SPAWN_MIN, CFG.SPAWN_BASE - (g.level - 1) * 3);
   g.nextSpawn = g.frame + interval;
@@ -634,6 +766,14 @@ function drawHUD(ctx, pal) {
                  Math.round(CFG.W / CFG.LEVEL_YELLOWS), 5);
   }
 
+  // Daily mode badge
+  if (g.dailyMode) {
+    ctx.fillStyle = 'rgba(227,179,65,0.2)';
+    ctx.fillRect(CFG.W / 2 - 28, 55, 56, 12);
+    ctx.fillStyle = '#e3b341';
+    ctx.font = '8px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('DAILY', CFG.W / 2, 64);
+  }
   // Labels
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.font = uiFont(10);
@@ -651,12 +791,14 @@ const SFX_BTN  = { x: CFG.W - 32, y: 2, w: 30, h: 30 };
 
 // Tap regions — single source of truth for both drawing and hit-testing
 const BTN = {
-  LB_TITLE:   { x: CFG.W / 2 - 80,  y: 440, w: 160, h: 32 },
-  LB_BACK:    { x: CFG.W / 2 - 70,  y: 572, w: 140, h: 36 },
-  PLAY_AGAIN: { x: CFG.W / 2 - 90,  y: 360, w: 180, h: 44 },
-  SUBMIT:     { x: CFG.W / 2 - 105, y: 428, w: 100, h: 32 },
-  LB_GO:      { x: CFG.W / 2 + 5,   y: 428, w: 100, h: 32 },
-  HOME_GO:    { x: CFG.W / 2 - 55,  y: 468, w: 110, h: 26 },
+  LB_TITLE:    { x: CFG.W / 2 - 80,  y: 440, w: 160, h: 32 },
+  DAILY_TITLE: { x: CFG.W / 2 - 80,  y: 480, w: 160, h: 32 },
+  LB_BACK:     { x: CFG.W / 2 - 70,  y: 572, w: 140, h: 36 },
+  PLAY_AGAIN:  { x: CFG.W / 2 - 90,  y: 360, w: 180, h: 44 },
+  SUBMIT:      { x: CFG.W / 2 - 105, y: 428, w: 100, h: 32 },
+  LB_GO:       { x: CFG.W / 2 + 5,   y: 428, w: 100, h: 32 },
+  HOME_GO:     { x: CFG.W / 2 - 55,  y: 468, w: 110, h: 26 },
+  SHARE:       { x: CFG.W / 2 - 55,  y: 536, w: 110, h: 26 },
 };
 
 function hitTest(lx, ly, r) {
@@ -709,6 +851,7 @@ function drawSfxBtn(ctx) {
 }
 
 function goHome() {
+  Audio.stopMusic();
   obs.forEach(o => o.active = false);
   parts.forEach(p => p.active = false);
   hist.clear();
@@ -790,6 +933,16 @@ function drawTitle(ctx) {
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.font = uiFont(13);
   ctx.fillText(t('leaderboard'), CFG.W / 2, 461);
+  // Daily challenge button
+  const todayStr = new Date().toISOString().slice(0, 10);
+  ctx.fillStyle = 'rgba(227,179,65,0.22)';
+  ctx.fillRect(BTN.DAILY_TITLE.x, BTN.DAILY_TITLE.y, BTN.DAILY_TITLE.w, BTN.DAILY_TITLE.h);
+  ctx.strokeStyle = 'rgba(227,179,65,0.5)';
+  ctx.lineWidth = 1; ctx.setLineDash([]);
+  ctx.strokeRect(BTN.DAILY_TITLE.x, BTN.DAILY_TITLE.y, BTN.DAILY_TITLE.w, BTN.DAILY_TITLE.h);
+  ctx.fillStyle = '#e3b341';
+  ctx.font = uiFont(13);
+  ctx.fillText('DAILY  ' + todayStr.slice(5), CFG.W / 2, 501);
   // Language toggle
   drawLangToggle(ctx, LANG_BTN_Y_TITLE);
 }
@@ -836,6 +989,13 @@ function drawGameOver(ctx) {
   ctx.fillStyle = 'rgba(255,255,255,0.65)';
   ctx.font = uiFont(14);
   ctx.fillText(t('home'), CFG.W / 2, 486);
+  // Share score button
+  ctx.fillStyle = 'rgba(88,166,255,0.18)';
+  ctx.fillRect(BTN.SHARE.x, BTN.SHARE.y, BTN.SHARE.w, BTN.SHARE.h);
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.font = uiFont(12);
+  ctx.textAlign = 'center';
+  ctx.fillText('SHARE SCORE', CFG.W / 2, BTN.SHARE.y + 18);
   // Language toggle
   drawLangToggle(ctx, LANG_BTN_Y_GO);
 }
@@ -976,6 +1136,19 @@ function drawOverlays(ctx, pal) {
     ctx.fillRect(0, 0, CFG.W, CFG.H);
     ctx.globalAlpha = 1;
   }
+  // Achievement unlock badge
+  if (g.achTimer > 0) {
+    const a = Math.min(1, g.achTimer / 30);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(255,215,0,0.18)';
+    ctx.fillRect(CFG.W / 2 - 95, CFG.H / 2 - 50, 190, 40);
+    ctx.strokeStyle = 'rgba(255,215,0,0.7)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.strokeRect(CFG.W / 2 - 95, CFG.H / 2 - 50, 190, 40);
+    drawText5(ctx, g.achLabel, CFG.W / 2, CFG.H / 2 - 40, 3, '#ffd700');
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ─── MAIN RENDER ─────────────────────────────────────────────────────────────
@@ -986,6 +1159,18 @@ function render(ctx, now) {
   if (g.state === S.LEADERBOARD) { drawLeaderboard(ctx); drawSfxBtn(ctx); return; }
   if (g.state === S.TITLE) { drawTitle(ctx); drawSfxBtn(ctx); return; }
   if (g.state === S.AD)    { drawAdWait(ctx); return; }
+
+  // Screen shake — applied to all game-play and game-over content
+  let didShake = false;
+  if (g.shakeFrames > 0) {
+    const sdx = (Math.random() - 0.5) * g.shakeMag;
+    const sdy = (Math.random() - 0.5) * g.shakeMag;
+    ctx.save();
+    ctx.translate(sdx, sdy);
+    g.shakeFrames--;
+    g.shakeMag *= 0.85;
+    didShake = true;
+  }
 
   drawLanes(ctx, pal);
 
@@ -1028,6 +1213,8 @@ function render(ctx, now) {
 
   // Home + SFX buttons — always on top during active play/dead states
   if (g.state === S.PLAYING || g.state === S.DEAD) { drawHomeBtn(ctx, pal); drawSfxBtn(ctx); }
+
+  if (didShake) ctx.restore();
 }
 
 function easeOut(t) { return 1 - (1 - t) * (1 - t); }
@@ -1083,6 +1270,7 @@ function update(now) {
   if (g.missTimer  > 0) g.missTimer--;
   if (g.levelTimer > 0) g.levelTimer--;
   if (g.flashTimer > 0) g.flashTimer--;
+  if (g.achTimer   > 0) g.achTimer--;
 
   // Tutorial progression
   if (g.tutStep < 3) {
@@ -1090,6 +1278,8 @@ function update(now) {
     if (g.tutStep === 1 && g.frame > 180) g.tutStep = 2;
     if (g.tutStep === 2 && g.yellows >= 1) { g.tutStep = 3; localStorage.setItem('echorunner_tutDone','1'); track('tutorial_complete'); }
   }
+
+  checkAchievements();
 }
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
@@ -1113,9 +1303,21 @@ function onTap(e) {
     if (checkLangToggle(lx, ly, LANG_BTN_Y_TITLE)) return;
     if (lx >= SFX_BTN.x && lx <= SFX_BTN.x + SFX_BTN.w && ly >= SFX_BTN.y && ly <= SFX_BTN.y + SFX_BTN.h) { Audio.toggle(); return; }
     if (hitTest(lx, ly, BTN.LB_TITLE)) { fetchLeaderboard(); g.state = S.LEADERBOARD; return; }
+    if (hitTest(lx, ly, BTN.DAILY_TITLE)) {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const seed = parseInt(dateStr.replace(/-/g, ''), 10);
+      dailyRng = mulberry32(seed);
+      g.dailyMode = true; g.dailyDate = dateStr;
+      initGame(); g.state = S.PLAYING;
+      g.tutStep = localStorage.getItem('echorunner_tutDone') ? 3 : 0;
+      Audio.startMusic();
+      return;
+    }
+    dailyRng = null; g.dailyMode = false;
     initGame();
     g.state = S.PLAYING;
     g.tutStep = localStorage.getItem('echorunner_tutDone') ? 3 : 0;
+    Audio.startMusic();
     return;
   }
 
@@ -1143,6 +1345,7 @@ function onTap(e) {
     if (hitTest(lx, ly, BTN.SUBMIT))     { showNameForm(); return; }
     if (hitTest(lx, ly, BTN.LB_GO))      { fetchLeaderboard(); g.state = S.LEADERBOARD; return; }
     if (hitTest(lx, ly, BTN.HOME_GO))    { goHome(); return; }
+    if (hitTest(lx, ly, BTN.SHARE))      { shareScore(); return; }
     return;
   }
 
@@ -1153,6 +1356,7 @@ function onTap(e) {
     g.flashTimer = 8;
     g.tapCount++;
     Audio.tap();
+    haptic(8);
   }
 }
 
