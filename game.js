@@ -649,6 +649,20 @@ function drawHUD(ctx, pal) {
 const HOME_BTN = { x: 2, y: 2, w: 30, h: 30 };
 const SFX_BTN  = { x: CFG.W - 32, y: 2, w: 30, h: 30 };
 
+// Tap regions — single source of truth for both drawing and hit-testing
+const BTN = {
+  LB_TITLE:   { x: CFG.W / 2 - 80,  y: 440, w: 160, h: 32 },
+  LB_BACK:    { x: CFG.W / 2 - 70,  y: 572, w: 140, h: 36 },
+  PLAY_AGAIN: { x: CFG.W / 2 - 90,  y: 360, w: 180, h: 44 },
+  SUBMIT:     { x: CFG.W / 2 - 105, y: 428, w: 100, h: 32 },
+  LB_GO:      { x: CFG.W / 2 + 5,   y: 428, w: 100, h: 32 },
+  HOME_GO:    { x: CFG.W / 2 - 55,  y: 468, w: 110, h: 26 },
+};
+
+function hitTest(lx, ly, r) {
+  return lx >= r.x && lx <= r.x + r.w && ly >= r.y && ly <= r.y + r.h;
+}
+
 function drawHomeBtn(ctx, pal) {
   const bx = 6, by = 6;
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -772,7 +786,7 @@ function drawTitle(ctx) {
   }
   // Leaderboard button
   ctx.fillStyle = 'rgba(88,166,255,0.2)';
-  ctx.fillRect(CFG.W / 2 - 80, 440, 160, 32);
+  ctx.fillRect(BTN.LB_TITLE.x, BTN.LB_TITLE.y, BTN.LB_TITLE.w, BTN.LB_TITLE.h);
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.font = uiFont(13);
   ctx.fillText(t('leaderboard'), CFG.W / 2, 461);
@@ -797,7 +811,7 @@ function drawGameOver(ctx) {
   }
   // Play again button
   ctx.fillStyle = '#238636';
-  ctx.fillRect(CFG.W / 2 - 90, 360, 180, 44);
+  ctx.fillRect(BTN.PLAY_AGAIN.x, BTN.PLAY_AGAIN.y, BTN.PLAY_AGAIN.w, BTN.PLAY_AGAIN.h);
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold 15px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
   ctx.fillText(t('playAgain'), CFG.W / 2, 387);
@@ -807,18 +821,18 @@ function drawGameOver(ctx) {
   // Submit score + Leaderboard row
   const hasFb = fbEnabled();
   ctx.fillStyle = hasFb ? 'rgba(35,134,54,0.7)' : 'rgba(255,255,255,0.06)';
-  ctx.fillRect(CFG.W / 2 - 105, 428, 100, 32);
+  ctx.fillRect(BTN.SUBMIT.x, BTN.SUBMIT.y, BTN.SUBMIT.w, BTN.SUBMIT.h);
   ctx.fillStyle = hasFb ? '#ffffff' : 'rgba(255,255,255,0.25)';
   ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
   ctx.fillText(t('submitScore'), CFG.W / 2 - 55, 449);
   ctx.fillStyle = 'rgba(88,166,255,0.25)';
-  ctx.fillRect(CFG.W / 2 + 5, 428, 100, 32);
+  ctx.fillRect(BTN.LB_GO.x, BTN.LB_GO.y, BTN.LB_GO.w, BTN.LB_GO.h);
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
   ctx.fillText(t('leaderboard'), CFG.W / 2 + 55, 449);
   // Home button
   ctx.fillStyle = 'rgba(255,255,255,0.1)';
-  ctx.fillRect(CFG.W / 2 - 55, 468, 110, 26);
+  ctx.fillRect(BTN.HOME_GO.x, BTN.HOME_GO.y, BTN.HOME_GO.w, BTN.HOME_GO.h);
   ctx.fillStyle = 'rgba(255,255,255,0.65)';
   ctx.font = uiFont(14);
   ctx.fillText(t('home'), CFG.W / 2, 486);
@@ -886,7 +900,7 @@ function drawLeaderboard(ctx) {
     ctx.fillText(t('yourBest') + ': ' + g.hi, CFG.W / 2, 562);
   }
   ctx.fillStyle = 'rgba(255,255,255,0.1)';
-  ctx.fillRect(CFG.W / 2 - 70, 572, 140, 36);
+  ctx.fillRect(BTN.LB_BACK.x, BTN.LB_BACK.y, BTN.LB_BACK.w, BTN.LB_BACK.h);
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.font = uiFont(13);
   ctx.textAlign = 'center';
@@ -905,8 +919,7 @@ function drawAdWait(ctx) {
 
 // ─── TUTORIAL PROMPTS ────────────────────────────────────────────────────────
 function drawTutorial(ctx) {
-  const tDone = localStorage.getItem('echorunner_tutDone');
-  if (tDone) return;
+  if (g.tutStep >= 3) return;
   if (g.tutStep === 1) {
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(20, CFG.H - 160, CFG.W - 40, 80);
@@ -1019,6 +1032,12 @@ function render(ctx, now) {
 
 function easeOut(t) { return 1 - (1 - t) * (1 - t); }
 
+function stepAnim(anim) {
+  if (!anim.active) return;
+  anim.t = Math.min(1, anim.t + 0.18);
+  if (anim.t >= 1) anim.active = false;
+}
+
 // ─── UPDATE ──────────────────────────────────────────────────────────────────
 function update(now) {
   if (g.state !== S.PLAYING) return;
@@ -1053,8 +1072,8 @@ function update(now) {
   tickParts();
 
   // Animations
-  if (g.laneAnim.active) { g.laneAnim.t = Math.min(1, g.laneAnim.t + 0.18); if (g.laneAnim.t >= 1) g.laneAnim.active = false; }
-  if (g.echoAnim.active) { g.echoAnim.t = Math.min(1, g.echoAnim.t + 0.18); if (g.echoAnim.t >= 1) g.echoAnim.active = false; }
+  stepAnim(g.laneAnim);
+  stepAnim(g.echoAnim);
 
   // Palette blend
   if (g.palBlend < 1) g.palBlend = Math.min(1, g.palBlend + 0.025);
@@ -1066,8 +1085,7 @@ function update(now) {
   if (g.flashTimer > 0) g.flashTimer--;
 
   // Tutorial progression
-  const tDone = localStorage.getItem('echorunner_tutDone');
-  if (!tDone) {
+  if (g.tutStep < 3) {
     if (g.tutStep === 0 && g.frame === 1) g.tutStep = 1;
     if (g.tutStep === 1 && g.frame > 180) g.tutStep = 2;
     if (g.tutStep === 2 && g.yellows >= 1) { g.tutStep = 3; localStorage.setItem('echorunner_tutDone','1'); track('tutorial_complete'); }
@@ -1094,12 +1112,10 @@ function onTap(e) {
     const { lx, ly } = tapLogical(e);
     if (checkLangToggle(lx, ly, LANG_BTN_Y_TITLE)) return;
     if (lx >= SFX_BTN.x && lx <= SFX_BTN.x + SFX_BTN.w && ly >= SFX_BTN.y && ly <= SFX_BTN.y + SFX_BTN.h) { Audio.toggle(); return; }
-    if (lx > CFG.W/2 - 80 && lx < CFG.W/2 + 80 && ly > 440 && ly < 472) {
-      fetchLeaderboard(); g.state = S.LEADERBOARD; return;
-    }
+    if (hitTest(lx, ly, BTN.LB_TITLE)) { fetchLeaderboard(); g.state = S.LEADERBOARD; return; }
     initGame();
     g.state = S.PLAYING;
-    g.tutStep = 0;
+    g.tutStep = localStorage.getItem('echorunner_tutDone') ? 3 : 0;
     return;
   }
 
@@ -1109,7 +1125,7 @@ function onTap(e) {
   if (lx >= SFX_BTN.x && lx <= SFX_BTN.x + SFX_BTN.w && ly >= SFX_BTN.y && ly <= SFX_BTN.y + SFX_BTN.h) { Audio.toggle(); return; }
 
   if (g.state === S.LEADERBOARD) {
-    if (lx > CFG.W/2 - 70 && lx < CFG.W/2 + 70 && ly > 572 && ly < 608) { g.state = S.TITLE; }
+    if (hitTest(lx, ly, BTN.LB_BACK)) { g.state = S.TITLE; }
     return;
   }
 
@@ -1123,10 +1139,10 @@ function onTap(e) {
 
   if (g.state === S.DEAD) {
     if (checkLangToggle(lx, ly, LANG_BTN_Y_GO)) return;
-    if (lx > CFG.W/2 - 90 && lx < CFG.W/2 + 90 && ly > 360 && ly < 404) { triggerPlayAgain(); return; }
-    if (lx > CFG.W/2 - 105 && lx < CFG.W/2 - 5  && ly > 428 && ly < 460) { showNameForm(); return; }
-    if (lx > CFG.W/2 + 5   && lx < CFG.W/2 + 105 && ly > 428 && ly < 460) { fetchLeaderboard(); g.state = S.LEADERBOARD; return; }
-    if (lx > CFG.W/2 - 55  && lx < CFG.W/2 + 55  && ly > 468 && ly < 494) { goHome(); return; }
+    if (hitTest(lx, ly, BTN.PLAY_AGAIN)) { triggerPlayAgain(); return; }
+    if (hitTest(lx, ly, BTN.SUBMIT))     { showNameForm(); return; }
+    if (hitTest(lx, ly, BTN.LB_GO))      { fetchLeaderboard(); g.state = S.LEADERBOARD; return; }
+    if (hitTest(lx, ly, BTN.HOME_GO))    { goHome(); return; }
     return;
   }
 
