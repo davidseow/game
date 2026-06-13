@@ -77,7 +77,7 @@ const Audio = (() => {
     const delayNode = ctx.createDelay(1.0);
     delayNode.delayTime.value = 60 / bpm;
     const feedbackGain = ctx.createGain(); feedbackGain.gain.value = 0.32;
-    const masterGain = ctx.createGain(); masterGain.gain.value = 0.07;
+    const masterGain = ctx.createGain(); masterGain.gain.value = 0.15;
     delayNode.connect(feedbackGain); feedbackGain.connect(delayNode);
     delayNode.connect(masterGain); masterGain.connect(ctx.destination);
     musicStep = 0;
@@ -100,8 +100,13 @@ const Audio = (() => {
     init,
     isOn()   { return sfxOn; },
     toggle() {
+      const wasOn = sfxOn;
       sfxOn = !sfxOn;
-      if (!sfxOn && FF) stopMusic();
+      if (!sfxOn && FF) {
+        stopMusic();
+      } else if (sfxOn && !wasOn && FF && g.state === S.PLAYING) {
+        startMusic();
+      }
       localStorage.setItem('echorunner_sfx', sfxOn ? '1' : '0');
       const url = new URL(window.location);
       url.searchParams.set('sfx', sfxOn ? '1' : '0');
