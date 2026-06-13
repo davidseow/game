@@ -21,6 +21,10 @@ const CFG = {
   LEVEL_YELLOWS: 12,
 };
 
+// ─── FEATURE FLAG ────────────────────────────────────────────────────────────
+// Enable new features by appending ?features=1 to the URL.
+const FF = new URLSearchParams(window.location.search).get('features') === '1';
+
 // ─── PALETTES ───────────────────────────────────────────────────────────────
 const PALETTES = [
   { bg1:'#0d1117', bg2:'#161b22', player:'#58a6ff', echo:'#30a46c', yellow:'#e3b341', red:'#f85149', lane:'#21262d', trail:'#388bfd' },
@@ -97,7 +101,7 @@ const Audio = (() => {
     isOn()   { return sfxOn; },
     toggle() {
       sfxOn = !sfxOn;
-      if (!sfxOn) stopMusic();
+      if (!sfxOn && FF) stopMusic();
       localStorage.setItem('echorunner_sfx', sfxOn ? '1' : '0');
       const url = new URL(window.location);
       url.searchParams.set('sfx', sfxOn ? '1' : '0');
@@ -210,7 +214,7 @@ function displayText(ctx, text, cx, cy, scale, col) {
 }
 
 // EN | 中文 toggle rendered at given y-centre
-const LANG_BTN_Y_TITLE = 520;
+const LANG_BTN_Y_TITLE = FF ? 520 : 488;
 const LANG_BTN_Y_GO    = 502;
 
 function drawLangToggle(ctx, y) {
@@ -503,7 +507,7 @@ function levelUp() {
   g.yellows = 0;
   g.levelTimer = 90;
   Audio.levelUp();
-  haptic([30, 30, 30, 30, 60]);
+  if (FF) haptic([30, 30, 30, 30, 60]);
 }
 
 // ─── SCORE YELLOW ────────────────────────────────────────────────────────────
@@ -522,14 +526,13 @@ function scoreYellow(o) {
     track('new_high_score', { score: g.hi });
   }
   g.comboTimer = 70;
-  haptic(g.combo >= 3 ? [15, 10, 15] : 15);
+  if (FF) haptic(g.combo >= 3 ? [15, 10, 15] : 15);
   const pal = getPal(g.level);
   const y = CFG.LANES[g.echoLane];
   emit(CFG.ECHO_X, y, pal.yellow, g.combo >= 3 ? 22 : 12, true);
   if (g.combo >= 3) {
     Audio.combo();
-    g.shakeFrames = Math.max(g.shakeFrames, 6);
-    g.shakeMag = Math.max(g.shakeMag, 4);
+    if (FF) { g.shakeFrames = Math.max(g.shakeFrames, 6); g.shakeMag = Math.max(g.shakeMag, 4); }
   } else {
     Audio.score();
   }
@@ -541,8 +544,7 @@ function die(who) {
   if (g.state !== S.PLAYING) return;
   g.state = S.DEAD;
   g.deathTimer = 80;
-  g.shakeFrames = 12; g.shakeMag = 8;
-  haptic([200, 50, 80]);
+  if (FF) { g.shakeFrames = 12; g.shakeMag = 8; haptic([200, 50, 80]); }
   const pal = getPal(g.level);
   const x = who === 'player' ? CFG.PLAYER_X : CFG.ECHO_X;
   const y = CFG.LANES[who === 'player' ? g.playerLane : g.echoLane];
@@ -563,8 +565,8 @@ function die(who) {
 function triggerPlayAgain() {
   g.state = S.AD;
   track('ad_request');
-  window.showAd(() => { track('ad_complete'); initGame(); g.state = S.PLAYING; Audio.startMusic(); });
-  setTimeout(() => { if (g.state === S.AD) { initGame(); g.state = S.PLAYING; Audio.startMusic(); } }, 10000);
+  window.showAd(() => { track('ad_complete'); initGame(); g.state = S.PLAYING; if (FF) Audio.startMusic(); });
+  setTimeout(() => { if (g.state === S.AD) { initGame(); g.state = S.PLAYING; if (FF) Audio.startMusic(); } }, 10000);
 }
 
 // ─── COLLISIONS ──────────────────────────────────────────────────────────────
@@ -767,7 +769,7 @@ function drawHUD(ctx, pal) {
   }
 
   // Daily mode badge
-  if (g.dailyMode) {
+  if (FF && g.dailyMode) {
     ctx.fillStyle = 'rgba(227,179,65,0.2)';
     ctx.fillRect(CFG.W / 2 - 28, 55, 56, 12);
     ctx.fillStyle = '#e3b341';
@@ -851,7 +853,7 @@ function drawSfxBtn(ctx) {
 }
 
 function goHome() {
-  Audio.stopMusic();
+  if (FF) Audio.stopMusic();
   obs.forEach(o => o.active = false);
   parts.forEach(p => p.active = false);
   hist.clear();
@@ -933,8 +935,8 @@ function drawTitle(ctx) {
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.font = uiFont(13);
   ctx.fillText(t('leaderboard'), CFG.W / 2, 461);
-  // Daily challenge button
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Daily challenge button (feature-flagged)
+  if (FF) { const todayStr = new Date().toISOString().slice(0, 10);
   ctx.fillStyle = 'rgba(227,179,65,0.22)';
   ctx.fillRect(BTN.DAILY_TITLE.x, BTN.DAILY_TITLE.y, BTN.DAILY_TITLE.w, BTN.DAILY_TITLE.h);
   ctx.strokeStyle = 'rgba(227,179,65,0.5)';
@@ -942,7 +944,7 @@ function drawTitle(ctx) {
   ctx.strokeRect(BTN.DAILY_TITLE.x, BTN.DAILY_TITLE.y, BTN.DAILY_TITLE.w, BTN.DAILY_TITLE.h);
   ctx.fillStyle = '#e3b341';
   ctx.font = uiFont(13);
-  ctx.fillText('DAILY  ' + todayStr.slice(5), CFG.W / 2, 501);
+  ctx.fillText('DAILY  ' + todayStr.slice(5), CFG.W / 2, 501); }
   // Language toggle
   drawLangToggle(ctx, LANG_BTN_Y_TITLE);
 }
@@ -989,13 +991,15 @@ function drawGameOver(ctx) {
   ctx.fillStyle = 'rgba(255,255,255,0.65)';
   ctx.font = uiFont(14);
   ctx.fillText(t('home'), CFG.W / 2, 486);
-  // Share score button
-  ctx.fillStyle = 'rgba(88,166,255,0.18)';
-  ctx.fillRect(BTN.SHARE.x, BTN.SHARE.y, BTN.SHARE.w, BTN.SHARE.h);
-  ctx.fillStyle = 'rgba(255,255,255,0.65)';
-  ctx.font = uiFont(12);
-  ctx.textAlign = 'center';
-  ctx.fillText('SHARE SCORE', CFG.W / 2, BTN.SHARE.y + 18);
+  // Share score button (feature-flagged)
+  if (FF) {
+    ctx.fillStyle = 'rgba(88,166,255,0.18)';
+    ctx.fillRect(BTN.SHARE.x, BTN.SHARE.y, BTN.SHARE.w, BTN.SHARE.h);
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = uiFont(12);
+    ctx.textAlign = 'center';
+    ctx.fillText('SHARE SCORE', CFG.W / 2, BTN.SHARE.y + 18);
+  }
   // Language toggle
   drawLangToggle(ctx, LANG_BTN_Y_GO);
 }
@@ -1137,7 +1141,7 @@ function drawOverlays(ctx, pal) {
     ctx.globalAlpha = 1;
   }
   // Achievement unlock badge
-  if (g.achTimer > 0) {
+  if (FF && g.achTimer > 0) {
     const a = Math.min(1, g.achTimer / 30);
     ctx.globalAlpha = a;
     ctx.fillStyle = 'rgba(255,215,0,0.18)';
@@ -1162,7 +1166,7 @@ function render(ctx, now) {
 
   // Screen shake — applied to all game-play and game-over content
   let didShake = false;
-  if (g.shakeFrames > 0) {
+  if (FF && g.shakeFrames > 0) {
     const sdx = (Math.random() - 0.5) * g.shakeMag;
     const sdy = (Math.random() - 0.5) * g.shakeMag;
     ctx.save();
@@ -1270,7 +1274,7 @@ function update(now) {
   if (g.missTimer  > 0) g.missTimer--;
   if (g.levelTimer > 0) g.levelTimer--;
   if (g.flashTimer > 0) g.flashTimer--;
-  if (g.achTimer   > 0) g.achTimer--;
+  if (FF && g.achTimer > 0) g.achTimer--;
 
   // Tutorial progression
   if (g.tutStep < 3) {
@@ -1279,7 +1283,7 @@ function update(now) {
     if (g.tutStep === 2 && g.yellows >= 1) { g.tutStep = 3; localStorage.setItem('echorunner_tutDone','1'); track('tutorial_complete'); }
   }
 
-  checkAchievements();
+  if (FF) checkAchievements();
 }
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
@@ -1303,7 +1307,7 @@ function onTap(e) {
     if (checkLangToggle(lx, ly, LANG_BTN_Y_TITLE)) return;
     if (lx >= SFX_BTN.x && lx <= SFX_BTN.x + SFX_BTN.w && ly >= SFX_BTN.y && ly <= SFX_BTN.y + SFX_BTN.h) { Audio.toggle(); return; }
     if (hitTest(lx, ly, BTN.LB_TITLE)) { fetchLeaderboard(); g.state = S.LEADERBOARD; return; }
-    if (hitTest(lx, ly, BTN.DAILY_TITLE)) {
+    if (FF && hitTest(lx, ly, BTN.DAILY_TITLE)) {
       const dateStr = new Date().toISOString().slice(0, 10);
       const seed = parseInt(dateStr.replace(/-/g, ''), 10);
       dailyRng = mulberry32(seed);
@@ -1317,7 +1321,7 @@ function onTap(e) {
     initGame();
     g.state = S.PLAYING;
     g.tutStep = localStorage.getItem('echorunner_tutDone') ? 3 : 0;
-    Audio.startMusic();
+    if (FF) Audio.startMusic();
     return;
   }
 
@@ -1344,8 +1348,8 @@ function onTap(e) {
     if (hitTest(lx, ly, BTN.PLAY_AGAIN)) { triggerPlayAgain(); return; }
     if (hitTest(lx, ly, BTN.SUBMIT))     { showNameForm(); return; }
     if (hitTest(lx, ly, BTN.LB_GO))      { fetchLeaderboard(); g.state = S.LEADERBOARD; return; }
-    if (hitTest(lx, ly, BTN.HOME_GO))    { goHome(); return; }
-    if (hitTest(lx, ly, BTN.SHARE))      { shareScore(); return; }
+    if (hitTest(lx, ly, BTN.HOME_GO))               { goHome(); return; }
+    if (FF && hitTest(lx, ly, BTN.SHARE))            { shareScore(); return; }
     return;
   }
 
@@ -1356,7 +1360,7 @@ function onTap(e) {
     g.flashTimer = 8;
     g.tapCount++;
     Audio.tap();
-    haptic(8);
+    if (FF) haptic(8);
   }
 }
 
