@@ -45,7 +45,9 @@ global.document = {
   addEventListener: () => {},
 };
 
-const _lsStore = {};
+const _lsStore = {
+  'echorunner_sfx': '0', // disable audio so Audio.score/die/etc. return early in tests
+};
 global.localStorage = {
   getItem: (k) => Object.prototype.hasOwnProperty.call(_lsStore, k) ? _lsStore[k] : null,
   setItem: (k, v) => { _lsStore[k] = String(v); },
