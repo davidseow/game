@@ -1,0 +1,7 @@
+{
+  "name": "echo-runner",
+  "private": true,
+  "scripts": {
+    "test": "node --require ./test/setup.js --test test/*.test.js"
+  }
+}

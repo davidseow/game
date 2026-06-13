@@ -1427,3 +1427,14 @@ function loop(ts) {
   g.state = S.TITLE;
   raf = requestAnimationFrame(loop);
 })();
+
+// Node.js test exports — inert in browser (no `module` global)
+if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
+  module.exports = {
+    CFG, PALETTES, LANG, S, g, hist,
+    hexToRgb, lerpHex, getPal,
+    sanitizeName, mulberry32,
+    easeOut, stepAnim, hitTest,
+    t, uiFont,
+  };
+}
