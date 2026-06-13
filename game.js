@@ -1431,10 +1431,11 @@ function loop(ts) {
 // Node.js test exports — inert in browser (no `module` global)
 if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
   module.exports = {
-    CFG, PALETTES, LANG, S, g, hist,
+    CFG, PALETTES, LANG, S, g, hist, obs,
     hexToRgb, lerpHex, getPal,
     sanitizeName, mulberry32,
     easeOut, stepAnim, hitTest,
     t, uiFont,
+    update, initGame, spawnObs, checkCollisions, scoreYellow, die,
   };
 }
