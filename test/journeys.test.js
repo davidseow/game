@@ -257,3 +257,13 @@ test('journey: starting a new game re-enables the submit button', () => {
   initGame();
   assert.equal(g.lb.submitState, 'idle', 'new game re-enables submission');
 });
+
+test('journey: html form submit locks submitState to done immediately', () => {
+  freshGame();
+  die('player');
+  assert.equal(g.lb.submitState, 'idle');
+  g.lb.submitState = 'done'; // simulates the nf-submit onclick side-effect
+  // Subsequent tap at SUBMIT coords must be blocked by the guard
+  onTap({ preventDefault() {}, clientX: 125, clientY: 444 });
+  assert.equal(g.lb.submitState, 'done', 'state stays done — form cannot reopen');
+});

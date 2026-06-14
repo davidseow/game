@@ -989,11 +989,11 @@ function drawGameOver(ctx) {
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
     ctx.fillText(t('submitting'), CFG.W / 2 - 55, 449);
-  } else {
-    // idle or error: show the button
-    ctx.fillStyle = hasFb ? 'rgba(35,134,54,0.7)' : 'rgba(255,255,255,0.06)';
+  } else if (hasFb) {
+    // idle or error: show the button (only when Firebase is available)
+    ctx.fillStyle = 'rgba(35,134,54,0.7)';
     ctx.fillRect(BTN.SUBMIT.x, BTN.SUBMIT.y, BTN.SUBMIT.w, BTN.SUBMIT.h);
-    ctx.fillStyle = hasFb ? '#ffffff' : 'rgba(255,255,255,0.25)';
+    ctx.fillStyle = '#ffffff';
     ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
     ctx.fillText(t('submitScore'), CFG.W / 2 - 55, 449);
   }
@@ -1426,6 +1426,7 @@ function loop(ts) {
     const name = sanitizeName(document.getElementById('nf-input').value);
     if (!name) { document.getElementById('nf-input').focus(); return; }
     document.getElementById('name-form').style.display = 'none';
+    g.lb.submitState = 'done';
     submitScore(name, g.score, g.level);
   };
   document.getElementById('nf-skip').onclick = () => {
