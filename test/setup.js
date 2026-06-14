@@ -36,6 +36,8 @@ global.window = {
   innerWidth: 360,
   innerHeight: 640,
   showAd: undefined,
+  AudioContext: class {},       // needed by Audio.init() which runs on every onTap()
+  webkitAudioContext: undefined,
 };
 
 global.document = {

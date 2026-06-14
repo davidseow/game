@@ -980,11 +980,23 @@ function drawGameOver(ctx) {
   ctx.fillText(t('adNote'), CFG.W / 2, 418);
   // Submit score + Leaderboard row
   const hasFb = fbEnabled();
-  ctx.fillStyle = hasFb ? 'rgba(35,134,54,0.7)' : 'rgba(255,255,255,0.06)';
-  ctx.fillRect(BTN.SUBMIT.x, BTN.SUBMIT.y, BTN.SUBMIT.w, BTN.SUBMIT.h);
-  ctx.fillStyle = hasFb ? '#ffffff' : 'rgba(255,255,255,0.25)';
-  ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
-  ctx.fillText(t('submitScore'), CFG.W / 2 - 55, 449);
+  const submitState = g.lb.submitState;
+  if (submitState === 'done') {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
+    ctx.fillText(t('submitted'), CFG.W / 2 - 55, 449);
+  } else if (submitState === 'submitting') {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
+    ctx.fillText(t('submitting'), CFG.W / 2 - 55, 449);
+  } else {
+    // idle or error: show the button
+    ctx.fillStyle = hasFb ? 'rgba(35,134,54,0.7)' : 'rgba(255,255,255,0.06)';
+    ctx.fillRect(BTN.SUBMIT.x, BTN.SUBMIT.y, BTN.SUBMIT.w, BTN.SUBMIT.h);
+    ctx.fillStyle = hasFb ? '#ffffff' : 'rgba(255,255,255,0.25)';
+    ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
+    ctx.fillText(t('submitScore'), CFG.W / 2 - 55, 449);
+  }
   ctx.fillStyle = 'rgba(88,166,255,0.25)';
   ctx.fillRect(BTN.LB_GO.x, BTN.LB_GO.y, BTN.LB_GO.w, BTN.LB_GO.h);
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
@@ -1351,7 +1363,7 @@ function onTap(e) {
   if (g.state === S.DEAD) {
     if (checkLangToggle(lx, ly, LANG_BTN_Y_GO)) return;
     if (hitTest(lx, ly, BTN.PLAY_AGAIN)) { triggerPlayAgain(); return; }
-    if (hitTest(lx, ly, BTN.SUBMIT))     { showNameForm(); return; }
+    if (g.lb.submitState === 'idle' && hitTest(lx, ly, BTN.SUBMIT)) { showNameForm(); return; }
     if (hitTest(lx, ly, BTN.LB_GO))      { fetchLeaderboard(); g.state = S.LEADERBOARD; return; }
     if (hitTest(lx, ly, BTN.HOME_GO))               { goHome(); return; }
     if (FF && hitTest(lx, ly, BTN.SHARE))            { shareScore(); return; }
@@ -1436,6 +1448,6 @@ if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
     sanitizeName, mulberry32,
     easeOut, stepAnim, hitTest,
     t, uiFont,
-    update, initGame, spawnObs, checkCollisions, scoreYellow, die,
+    update, initGame, spawnObs, checkCollisions, scoreYellow, die, onTap,
   };
 }

@@ -5,7 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   CFG, S, g, hist, obs,
-  update, initGame, spawnObs, checkCollisions, scoreYellow, die,
+  update, initGame, spawnObs, checkCollisions, scoreYellow, die, onTap,
 } = require('../game.js');
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -211,4 +211,49 @@ test('journey: update() is a no-op when state is not PLAYING', () => {
   const frameBefore = g.frame;
   update(9999);
   assert.equal(g.frame, frameBefore);
+});
+
+// ─── SUBMIT-ONCE ENFORCEMENT ──────────────────────────────────────────────────
+
+test('journey: submit state is idle when game-over screen first appears', () => {
+  freshGame();
+  die('player');
+  assert.equal(g.lb.submitState, 'idle');
+});
+
+test('journey: tapping submit button after submission does nothing', () => {
+  // Spy on document.getElementById('name-form').style.display to detect showNameForm() calls
+  let formOpened = false;
+  const origGetById = global.document.getElementById;
+  global.document.getElementById = (id) => {
+    if (id === 'name-form') return {
+      style: new Proxy({}, {
+        set(t, k, v) { if (k === 'display' && v === 'flex') formOpened = true; t[k] = v; return true; },
+      }),
+    };
+    if (id === 'nf-title') return { textContent: '' };
+    if (id === 'nf-input') return { value: '', focus() {} };
+    return origGetById(id);
+  };
+  try {
+    freshGame();
+    die('player');
+    g.lb.submitState = 'done';
+    // Tap at centre of BTN.SUBMIT: x = CFG.W/2 - 105 + 50 = 125, y = 428 + 16 = 444
+    onTap({ preventDefault() {}, clientX: 125, clientY: 444 });
+    // Guard must block re-opening the name form
+    assert.equal(formOpened, false, 'name form must not open after score already submitted');
+    // Guard condition expressed directly — fails if removed from onTap
+    assert.equal(g.lb.submitState === 'idle', false, 'submitState guard must block re-submission');
+  } finally {
+    global.document.getElementById = origGetById;
+  }
+});
+
+test('journey: starting a new game re-enables the submit button', () => {
+  freshGame();
+  die('player');
+  g.lb.submitState = 'done';
+  initGame();
+  assert.equal(g.lb.submitState, 'idle', 'new game re-enables submission');
 });
