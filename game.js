@@ -978,13 +978,15 @@ function drawGameOver(ctx) {
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.font = uiFont(10);
   ctx.fillText(t('adNote'), CFG.W / 2, 418);
-  // Submit score + Leaderboard row
+  // Submit score + Leaderboard row (only show submit button if not yet submitted/skipped)
   const hasFb = fbEnabled();
-  ctx.fillStyle = hasFb ? 'rgba(35,134,54,0.7)' : 'rgba(255,255,255,0.06)';
-  ctx.fillRect(BTN.SUBMIT.x, BTN.SUBMIT.y, BTN.SUBMIT.w, BTN.SUBMIT.h);
-  ctx.fillStyle = hasFb ? '#ffffff' : 'rgba(255,255,255,0.25)';
-  ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
-  ctx.fillText(t('submitScore'), CFG.W / 2 - 55, 449);
+  if (g.lb.submitState === 'idle') {
+    ctx.fillStyle = hasFb ? 'rgba(35,134,54,0.7)' : 'rgba(255,255,255,0.06)';
+    ctx.fillRect(BTN.SUBMIT.x, BTN.SUBMIT.y, BTN.SUBMIT.w, BTN.SUBMIT.h);
+    ctx.fillStyle = hasFb ? '#ffffff' : 'rgba(255,255,255,0.25)';
+    ctx.font = `bold 10px ${currentLang === 'zh' ? ZH_FONT : 'monospace'}`;
+    ctx.fillText(t('submitScore'), CFG.W / 2 - 55, 449);
+  }
   ctx.fillStyle = 'rgba(88,166,255,0.25)';
   ctx.fillRect(BTN.LB_GO.x, BTN.LB_GO.y, BTN.LB_GO.w, BTN.LB_GO.h);
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
@@ -1414,10 +1416,12 @@ function loop(ts) {
     const name = sanitizeName(document.getElementById('nf-input').value);
     if (!name) { document.getElementById('nf-input').focus(); return; }
     document.getElementById('name-form').style.display = 'none';
+    g.lb.submitState = 'done';
     submitScore(name, g.score, g.level);
   };
   document.getElementById('nf-skip').onclick = () => {
     document.getElementById('name-form').style.display = 'none';
+    g.lb.submitState = 'done';
   };
 
   if ('serviceWorker' in navigator) {
