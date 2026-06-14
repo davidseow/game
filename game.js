@@ -1416,6 +1416,7 @@ function loop(ts) {
     const name = sanitizeName(document.getElementById('nf-input').value);
     if (!name) { document.getElementById('nf-input').focus(); return; }
     document.getElementById('name-form').style.display = 'none';
+    g.lb.submitState = 'done';
     submitScore(name, g.score, g.level);
   };
   document.getElementById('nf-skip').onclick = () => {
